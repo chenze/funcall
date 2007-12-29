@@ -13,9 +13,8 @@ dnl [  --with-funcall             Include funcall support])
 
 dnl Otherwise use enable:
 
-dnl PHP_ARG_ENABLE(funcall, whether to enable funcall support,
-dnl Make sure that the comment is aligned:
-dnl [  --enable-funcall           Enable funcall support])
+PHP_ARG_ENABLE(funcall, whether to enable funcall support,
+[  --enable-funcall           Enable funcall support])
 
 if test "$PHP_FUNCALL" != "no"; then
   dnl Write more examples of tests here...

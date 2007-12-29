@@ -27,15 +27,24 @@
 #include "ext/standard/info.h"
 #include "php_funcall.h"
 
-/* If you declare any globals in php_funcall.h uncomment this:
 ZEND_DECLARE_MODULE_GLOBALS(funcall)
-*/
 
 /* True global resources - no need for thread safety here */
 static int le_funcall;
 
-ZEND_API *fc_zend_execute;
-ZEND_API *fc_zend_execute_internal;
+ZEND_DLEXPORT void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
+ZEND_DLEXPORT void (*fc_zend_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
+
+ZEND_DLEXPORT void fc_execute(zend_op_array *op_array TSRMLS_DC);
+ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
+
+#define NEW_FN_LIST(li,fname) struct fc_function_list *li; \
+    li=emalloc(sizeof(struct fc_function_list));                   \
+    strcpy(li->name,fname);
+
+#define NEW_CB_LIST(li,fname) struct fc_callback_list *li; \
+    li=emalloc(sizeof(struct fc_callback_list));                   \
+    strcpy(li->name,fname);
 
 /* {{{ funcall_functions[]
  *
@@ -75,8 +84,6 @@ ZEND_GET_MODULE(funcall)
 /* {{{ PHP_INI
  */
 PHP_INI_BEGIN()
-    fc_zend_execute=zend_execute;
-    fc_zend_execute_internal=zend_execute_internal;
     //STD_PHP_INI_ENTRY("funcall.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_funcall_globals, funcall_globals)
     //STD_PHP_INI_ENTRY("funcall.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_funcall_globals, funcall_globals)
 PHP_INI_END()
@@ -97,6 +104,8 @@ static void php_funcall_init_globals(zend_funcall_globals *funcall_globals)
  */
 PHP_MINIT_FUNCTION(funcall)
 {
+    fc_zend_execute=zend_execute;
+    fc_zend_execute_internal=zend_execute_internal;
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
@@ -165,6 +174,49 @@ PHP_FUNCTION(fc_add)
 		return;
 	}
 
+    int fl_exists=0;
+
+    struct fc_function_list *gfl;
+    struct fc_callback_list *cl;
+    gfl=FCG(fc_fn_list); 
+    if (!gfl) {
+        NEW_FN_LIST(gfl,function_name);
+    } else {
+         while (1) {
+            if (!strcmp(gfl->name,function_name)) {
+                cl=gfl->callback_ref;
+                fl_exists=1;
+                break;
+            }
+            if (!gfl->next) {
+                NEW_FN_LIST(new_gfl,function_name);
+                gfl->next=new_gfl;
+                gfl=new_gfl;
+                break;
+            }
+            gfl=gfl->next;
+        }
+    }
+
+
+    if (!cl) {
+        NEW_CB_LIST(cl,callback_name);
+        gfl->callback_ref=cl;
+    } else {
+        while (1) {
+            if (!strcmp(cl->name,callback_name)) {
+                RETURN_FALSE
+            }
+            if (!cl->next) {
+                NEW_CB_LIST(cl,callback_name);
+                break;
+            }
+            cl=cl->next;
+        }
+    }
+
+
+
 	RETURN_TRUE;
 }
 PHP_FUNCTION(fc_list)
@@ -177,10 +229,10 @@ PHP_FUNCTION(fc_list)
    follow this convention for the convenience of others editing your code.
 */
 
-ZEND_API fc_execute(zend_op_array *op_array TSRMLS_CC) 
+ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_CC) 
 {
 }
-ZEND_API fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_CC) 
+ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_CC) 
 {
 }
 

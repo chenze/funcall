@@ -35,16 +35,16 @@ extern zend_module_entry funcall_module_entry;
 #endif
 
 struct fc_function_list {
-    char *name,
-    zval *func,
-    fc_callback_list &callback_ref,
-    fc_function_list *next
-}
+    char *name;
+    zval *func;
+    struct fc_callback_list *callback_ref;
+    struct fc_function_list *next;
+};
 struct fc_callback_list {
-    char *name,
-    zval *func,
-    fc_function_list *next
-}
+    char *name;
+    zval *func;
+    struct fc_function_list *next;
+};
 
 PHP_MINIT_FUNCTION(funcall);
 PHP_MSHUTDOWN_FUNCTION(funcall);
@@ -61,8 +61,7 @@ PHP_FUNCTION(fc_list);
 
 */
 ZEND_BEGIN_MODULE_GLOBALS(funcall)
-    fc_function_list fc_fn_list;	
-    fc_callback_list fc_cb_list;
+    struct fc_function_list *fc_fn_list;	
 ZEND_END_MODULE_GLOBALS(funcall)
 
 /* In every utility function you add that needs to use variables 
@@ -76,9 +75,9 @@ ZEND_END_MODULE_GLOBALS(funcall)
 */
 
 #ifdef ZTS
-#define FUNCALL_G(v) TSRMG(funcall_globals_id, zend_funcall_globals *, v)
+#define FCG(v) TSRMG(funcall_globals_id, zend_funcall_globals *, v)
 #else
-#define FUNCALL_G(v) (funcall_globals.v)
+#define FCG(v) (funcall_globals.v)
 #endif
 
 #endif	/* PHP_FUNCALL_H */
