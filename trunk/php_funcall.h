@@ -34,17 +34,17 @@ extern zend_module_entry funcall_module_entry;
 #include "TSRM.h"
 #endif
 
-struct fc_function_list {
+typedef struct _fc_function_list {
     char *name;
     zval *func;
     struct fc_callback_list *callback_ref;
     struct fc_function_list *next;
-};
-struct fc_callback_list {
+} fc_function_list;
+typedef struct _fc_callback_list {
     char *name;
     zval *func;
     struct fc_function_list *next;
-};
+} fc_callback_list;
 
 PHP_MINIT_FUNCTION(funcall);
 PHP_MSHUTDOWN_FUNCTION(funcall);
@@ -52,7 +52,7 @@ PHP_RINIT_FUNCTION(funcall);
 PHP_RSHUTDOWN_FUNCTION(funcall);
 PHP_MINFO_FUNCTION(funcall);
 
-PHP_FUNCTION(fc_add);
+PHP_FUNCTION(fc_add_start);
 PHP_FUNCTION(fc_list);
 
 /* 
@@ -61,7 +61,8 @@ PHP_FUNCTION(fc_list);
 
 */
 ZEND_BEGIN_MODULE_GLOBALS(funcall)
-    struct fc_function_list *fc_fn_list;	
+    fc_function_list *fc_start_list;	
+    fc_function_list *fc_end_list;	
 ZEND_END_MODULE_GLOBALS(funcall)
 
 /* In every utility function you add that needs to use variables 
