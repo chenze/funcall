@@ -38,20 +38,28 @@ ZEND_DLEXPORT void (*fc_zend_execute_internal)(zend_execute_data *execute_data_p
 ZEND_DLEXPORT void fc_execute(zend_op_array *op_array TSRMLS_DC);
 ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
 
-#define NEW_FN_LIST(li,fname) struct fc_function_list *li; \
-    li=emalloc(sizeof(struct fc_function_list));                   \
-    strcpy(li->name,fname);
+#define NEW_FN_LIST(li,fname,len) li=emalloc(sizeof(fc_function_list));                   \
+    li->name=emalloc(len+1);\
+    strcpy(li->name,fname);\
+    MAKE_STD_ZVAL(li->func);\
+    Z_STRVAL_P(li->func)=emalloc(len+1);\
+    strcpy(Z_STRVAL_P(li->func),fname);\
+    li->next=NULL
 
-#define NEW_CB_LIST(li,fname) struct fc_callback_list *li; \
-    li=emalloc(sizeof(struct fc_callback_list));                   \
-    strcpy(li->name,fname);
+#define NEW_CB_LIST(li,fname,len) li=emalloc(sizeof(fc_callback_list));                   \
+    li->name=emalloc(len+1);\
+    strcpy(li->name,fname);\
+    MAKE_STD_ZVAL(li->func);\
+    Z_STRVAL_P(li->func)=emalloc(len+1);\
+    strcpy(Z_STRVAL_P(li->func),fname);\
+    li->next=NULL
 
 /* {{{ funcall_functions[]
  *
  * Every user visible function must have an entry in funcall_functions[].
  */
 zend_function_entry funcall_functions[] = {
-	PHP_FE(fc_add,	NULL)
+	PHP_FE(fc_add_start,	NULL)
 	PHP_FE(fc_list,	NULL)
 	{NULL, NULL, NULL}	/* Must be the last line in funcall_functions[] */
 };
@@ -105,7 +113,11 @@ static void php_funcall_init_globals(zend_funcall_globals *funcall_globals)
 PHP_MINIT_FUNCTION(funcall)
 {
     fc_zend_execute=zend_execute;
+    zend_execute=fc_execute;
+
     fc_zend_execute_internal=zend_execute_internal;
+    zend_execute_internal=fc_execute_internal;
+
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
@@ -162,9 +174,9 @@ PHP_MINFO_FUNCTION(funcall)
    purposes. */
 
 /* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string fc_add(string function,string callback)
+/* {{{ proto string fc_add_start(string function,string callback)
    Return true if successfully add */
-PHP_FUNCTION(fc_add)
+PHP_FUNCTION(fc_add_start)
 {
     char *function_name;
     char *callback_name;
@@ -174,22 +186,22 @@ PHP_FUNCTION(fc_add)
 		return;
 	}
 
-    int fl_exists=0;
 
-    struct fc_function_list *gfl;
-    struct fc_callback_list *cl;
-    gfl=FCG(fc_fn_list); 
-    if (!gfl) {
-        NEW_FN_LIST(gfl,function_name);
+    fc_function_list *tmp_gfl,*gfl,*new_gfl;
+    fc_callback_list *cl=NULL,*new_cl;
+    tmp_gfl=FCG(fc_start_list); 
+    if (!tmp_gfl) {
+        NEW_FN_LIST(FCG(fc_start_list),function_name,function_len);
+        gfl=FCG(fc_start_list);
     } else {
+        gfl=FCG(fc_start_list);
          while (1) {
             if (!strcmp(gfl->name,function_name)) {
                 cl=gfl->callback_ref;
-                fl_exists=1;
                 break;
             }
             if (!gfl->next) {
-                NEW_FN_LIST(new_gfl,function_name);
+                NEW_FN_LIST(new_gfl,function_name,function_len);
                 gfl->next=new_gfl;
                 gfl=new_gfl;
                 break;
@@ -198,9 +210,8 @@ PHP_FUNCTION(fc_add)
         }
     }
 
-
     if (!cl) {
-        NEW_CB_LIST(cl,callback_name);
+        NEW_CB_LIST(cl,callback_name,callback_len);
         gfl->callback_ref=cl;
     } else {
         while (1) {
@@ -208,19 +219,44 @@ PHP_FUNCTION(fc_add)
                 RETURN_FALSE
             }
             if (!cl->next) {
-                NEW_CB_LIST(cl,callback_name);
+                NEW_CB_LIST(new_cl,callback_name,callback_len);
+                cl->next=new_cl;
                 break;
             }
             cl=cl->next;
         }
     }
-
-
-
 	RETURN_TRUE;
 }
 PHP_FUNCTION(fc_list)
 {
+zval **function_name;
+zval *retval;
+
+if((ZEND_NUM_ARGS() != 1) || (zend_get_parameters_ex(1, &function_name) != SUCCESS))
+{
+    WRONG_PARAM_COUNT;
+}
+
+if((*function_name)->type != IS_STRING)
+{
+    zend_error(E_ERROR, "Function requires string argument");
+}
+
+//TSRMSLS_FETCH();
+
+if(call_user_function_ex(CG(function_table), NULL, *function_name, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
+{
+    zend_error(E_ERROR, "Function call failed");
+}
+
+zend_printf("We have %i as type\n", retval->type);
+
+*return_value = *retval;
+zval_copy_ctor(return_value);
+zval_ptr_dtor(&retval);
+//    fc_function_list *gfl;
+ //   gfl=FCG(fc_start_list); 
 }
 /* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
@@ -229,11 +265,50 @@ PHP_FUNCTION(fc_list)
    follow this convention for the convenience of others editing your code.
 */
 
-ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_CC) 
+ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
+    fc_function_list *fl_start;
+    fc_callback_list *cl;
+    char *current_function;
+    fl_start=FCG(fc_start_list); 
+    zval *retval = NULL;
+    zval *args[1];
+zend_function *func;
+   MAKE_STD_ZVAL(args[0]);
+        MAKE_STD_ZVAL(retval);
+int cb_res = NULL;
+printf("%s|\n",op_array->function_name);
+    while (fl_start) {
+        if (!strcmp(fl_start->name,op_array->function_name)) {
+            cl=fl_start->callback_ref;
+            while (cl) {
+printf("xx%s|----\n",cl->name);
+if (zend_hash_find(CG(function_table), cl->name, strlen(cl->name) + 1, (void **) &func)!=FAILURE) {
+printf("ii%s|\n",func->common.function_name);
+} 
+//cl->func->type=ZEND_USER_FUNCTION;
+//TSRMSLS_FETCH();
+//if(call_user_function_ex(EG(function_table), NULL, func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
+//{
+//printf("callok%s|\n",func->common.function_name);
+//}
+               cb_res=call_user_function(CG(function_table),
+                                    NULL,
+                                    func,
+                                    retval, 0, args TSRMLS_CC);
+printf("ok%d%s|----\n",cb_res,cl->name);
+                cl=cl->next;
+            }
+            break;
+        }
+        fl_start=fl_start->next;
+    }
+    fc_zend_execute(op_array TSRMLS_CC);
 }
-ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_CC) 
+ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
+    execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+    //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }
 
 /*
