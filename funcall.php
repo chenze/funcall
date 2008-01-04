@@ -4,15 +4,19 @@ $br = (php_sapi_name() == "cli")? "":"<br>";
 if(!extension_loaded('funcall')) {
 	dl('funcall.so');
 }
+class c {
 function aa() {
+echo "aa()\n";
+}
 }
 function bbb() {
     echo "---------cb-------------\n";
     return true;
 }
-fc_add_start('aa','bb');
-fc_list('bb');
-//aa();
+fc_add_start('c::aa','bbb');
+//fc_list('bbb');
+$c=new c;
+$c->aa();
 //$a=trim('aa ');
 //echo $a;
 exit;
