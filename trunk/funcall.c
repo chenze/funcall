@@ -42,16 +42,20 @@ ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
     li->name=emalloc(len+1);\
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
-    Z_STRVAL_P(li->func)=emalloc(len+1);\
+    convert_to_string(li->func);\
+    Z_STRVAL_P(li->func)=emalloc(len);\
     strcpy(Z_STRVAL_P(li->func),fname);\
+    Z_STRLEN_P(li->func)=len;\
     li->next=NULL
 
 #define NEW_CB_LIST(li,fname,len) li=emalloc(sizeof(fc_callback_list));                   \
-    li->name=emalloc(len+1);\
+    li->name=emalloc(len);\
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
-    Z_STRVAL_P(li->func)=emalloc(len+1);\
+    convert_to_string(li->func);\
+    Z_STRVAL_P(li->func)=emalloc(len);\
     strcpy(Z_STRVAL_P(li->func),fname);\
+    Z_STRLEN_P(li->func)=len;\
     li->next=NULL
 
 /* {{{ funcall_functions[]
@@ -230,33 +234,8 @@ PHP_FUNCTION(fc_add_start)
 }
 PHP_FUNCTION(fc_list)
 {
-zval **function_name;
-zval *retval;
-
-if((ZEND_NUM_ARGS() != 1) || (zend_get_parameters_ex(1, &function_name) != SUCCESS))
-{
-    WRONG_PARAM_COUNT;
-}
-
-if((*function_name)->type != IS_STRING)
-{
-    zend_error(E_ERROR, "Function requires string argument");
-}
-
-//TSRMSLS_FETCH();
-
-if(call_user_function_ex(CG(function_table), NULL, *function_name, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
-{
-    zend_error(E_ERROR, "Function call failed");
-}
-
-zend_printf("We have %i as type\n", retval->type);
-
-*return_value = *retval;
-zval_copy_ctor(return_value);
-zval_ptr_dtor(&retval);
-//    fc_function_list *gfl;
- //   gfl=FCG(fc_start_list); 
+    fc_function_list *gfl;
+    gfl=FCG(fc_start_list); 
 }
 /* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
@@ -265,45 +244,65 @@ zval_ptr_dtor(&retval);
    follow this convention for the convenience of others editing your code.
 */
 
+char *get_current_function_name(zend_op_array *op_array TSRMLS_DC) 
+{
+    char *fname;
+    int l;
+    l=strlen(op_array->function_name);
+    if (op_array->scope && strlen(op_array->scope->name)>0) {
+        l+=strlen(op_array->scope->name)+2;
+        fname=emalloc(l);
+        strcpy(fname,op_array->scope->name);
+        strcat(fname,"::");
+        strcat(fname,op_array->function_name);
+    } else {
+        fname=emalloc(l);
+        strcpy(fname,op_array->function_name);
+    }
+    //fname=emalloc(strlen(op_array->function_name));
+    //op_array->function_name;
+    return fname;
+}
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
     fc_function_list *fl_start;
     fc_callback_list *cl;
     char *current_function;
     fl_start=FCG(fc_start_list); 
-    zval *retval = NULL;
+    zval *retval;
     zval *args[1];
-zend_function *func;
-   MAKE_STD_ZVAL(args[0]);
-        MAKE_STD_ZVAL(retval);
-int cb_res = NULL;
-printf("%s|\n",op_array->function_name);
+
+    MAKE_STD_ZVAL(args[0]);
+    MAKE_STD_ZVAL(retval);
+
+    current_function=get_current_function_name(op_array TSRMLS_CC);
+
     while (fl_start) {
-        if (!strcmp(fl_start->name,op_array->function_name)) {
+        if (!strcmp(fl_start->name,current_function)) {
             cl=fl_start->callback_ref;
             while (cl) {
-printf("xx%s|----\n",cl->name);
-if (zend_hash_find(CG(function_table), cl->name, strlen(cl->name) + 1, (void **) &func)!=FAILURE) {
-printf("ii%s|\n",func->common.function_name);
-} 
-//cl->func->type=ZEND_USER_FUNCTION;
-//TSRMSLS_FETCH();
-//if(call_user_function_ex(EG(function_table), NULL, func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
-//{
-//printf("callok%s|\n",func->common.function_name);
-//}
-               cb_res=call_user_function(CG(function_table),
-                                    NULL,
-                                    func,
-                                    retval, 0, args TSRMLS_CC);
-printf("ok%d%s|----\n",cb_res,cl->name);
+                //if (zend_hash_find(CG(function_table), cl->name, strlen(cl->name) + 1, (void **) &func)!=FAILURE) {
+                //printf("ii%s|\n",func->common.function_name);
+                //} 
+                //cl->func->type=ZEND_USER_FUNCTION;
+                //TSRMSLS_FETCH();
+                //if(call_user_function_ex(EG(function_table), NULL, func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
+                //{
+                //printf("callok%s|\n",func->common.function_name);
+                //}
+                //cl->func->type=IS_STRING;
+                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
+                {
+                    printf("ok%d|%s----\n",IS_STRING,Z_STRVAL_P(cl->func));
+                }
                 cl=cl->next;
             }
             break;
         }
         fl_start=fl_start->next;
     }
-    fc_zend_execute(op_array TSRMLS_CC);
+    //fc_zend_execute(op_array TSRMLS_CC);
+    execute(op_array TSRMLS_CC);
 }
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
