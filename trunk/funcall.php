@@ -5,18 +5,22 @@ if(!extension_loaded('funcall')) {
 	dl('funcall.so');
 }
 class c {
-function aa() {
+function aa($p1,$p2,$p3,$p4) {
+echo "aa()\n";
+}
+function a2($p1) {
 echo "aa()\n";
 }
 }
-function bbb() {
-    echo "---------cb-------------\n";
+function bbb($a,$b) {
+    var_dump($a);
     return true;
 }
 fc_add_start('c::aa','bbb');
 //fc_list('bbb');
 $c=new c;
-$c->aa();
+$c->aa('aa','bb','cc','dd');
+//$c->a2('aa');
 //$a=trim('aa ');
 //echo $a;
 exit;
