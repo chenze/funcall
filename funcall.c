@@ -270,30 +270,41 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
     char *current_function;
     fl_start=FCG(fc_start_list); 
     zval *retval;
-    zval *args[1];
 
-    MAKE_STD_ZVAL(args[0]);
+    zval **test_v;
+    //MAKE_STD_ZVAL(test_v);
+    //convert_to_long(test_v);
+    //Z_LVAL_P(test_v)=2;
+
+
+    zval ***args=NULL;
+    args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
+    args[0] = (zval**)emalloc(sizeof(zval**));
+    MAKE_STD_ZVAL(*args[0]);
+    array_init(*args[0]);
+
+    /*These get-args-code is from ZEND_FUNCTION(func_get_args)*/
+    void **p = EG(argument_stack).top_element-2;
+    int arg_count = (int)(zend_uintptr_t) *p;
+    int i;
+    for (i=0; i<arg_count; i++) {
+        zval *element;
+
+        ALLOC_ZVAL(element);
+        *element = **((zval **) (p-(arg_count-i)));
+        zval_copy_ctor(element);
+        INIT_PZVAL(element);
+        zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
+    }
     MAKE_STD_ZVAL(retval);
-
     current_function=get_current_function_name(op_array TSRMLS_CC);
-
     while (fl_start) {
         if (!strcmp(fl_start->name,current_function)) {
             cl=fl_start->callback_ref;
             while (cl) {
-                //if (zend_hash_find(CG(function_table), cl->name, strlen(cl->name) + 1, (void **) &func)!=FAILURE) {
-                //printf("ii%s|\n",func->common.function_name);
-                //} 
-                //cl->func->type=ZEND_USER_FUNCTION;
-                //TSRMSLS_FETCH();
-                //if(call_user_function_ex(EG(function_table), NULL, func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
-                //{
-                //printf("callok%s|\n",func->common.function_name);
-                //}
-                //cl->func->type=IS_STRING;
-                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 0, NULL, 0,NULL TSRMLS_CC) != SUCCESS)
+                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 1, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
-                    printf("ok%d|%s----\n",IS_STRING,Z_STRVAL_P(cl->func));
+                    //
                 }
                 cl=cl->next;
             }
@@ -301,8 +312,15 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         }
         fl_start=fl_start->next;
     }
+    if (args) {
+        //zval_ptr_dtor(args[0]);
+        efree(args[0]);
+        efree(args);
+    } 
+
     //fc_zend_execute(op_array TSRMLS_CC);
     execute(op_array TSRMLS_CC);
+    //fprintf(stderr,"calling f11\n");
 }
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
