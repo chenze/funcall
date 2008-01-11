@@ -43,17 +43,17 @@ ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
     convert_to_string(li->func);\
-    Z_STRVAL_P(li->func)=emalloc(len);\
+    Z_STRVAL_P(li->func)=emalloc(len+1);\
     strcpy(Z_STRVAL_P(li->func),fname);\
     Z_STRLEN_P(li->func)=len;\
     li->next=NULL
 
 #define NEW_CB_LIST(li,fname,len) li=emalloc(sizeof(fc_callback_list));                   \
-    li->name=emalloc(len);\
+    li->name=emalloc(len+1);\
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
     convert_to_string(li->func);\
-    Z_STRVAL_P(li->func)=emalloc(len);\
+    Z_STRVAL_P(li->func)=emalloc(len+1);\
     strcpy(Z_STRVAL_P(li->func),fname);\
     Z_STRLEN_P(li->func)=len;\
     li->next=NULL
@@ -250,24 +250,22 @@ char *get_current_function_name(zend_op_array *op_array TSRMLS_DC)
     int l;
     l=strlen(op_array->function_name);
     if (op_array->scope && strlen(op_array->scope->name)>0) {
-        l+=strlen(op_array->scope->name)+2;
+        l+=strlen(op_array->scope->name)+3;
         fname=emalloc(l);
         strcpy(fname,op_array->scope->name);
         strcat(fname,"::");
         strcat(fname,op_array->function_name);
     } else {
-        fname=emalloc(l);
+        fname=emalloc(l+1);
         strcpy(fname,op_array->function_name);
     }
     //fname=emalloc(strlen(op_array->function_name));
     //op_array->function_name;
     return fname;
 }
-ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
-{
+void fc_do_callback() {
     fc_function_list *fl_start;
     fc_callback_list *cl;
-    char *current_function;
     fl_start=FCG(fc_start_list); 
     zval *retval;
 
@@ -297,7 +295,27 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     }
     MAKE_STD_ZVAL(retval);
-    current_function=get_current_function_name(op_array TSRMLS_CC);
+    //current_function=get_current_function_name(op_array TSRMLS_CC);
+    
+    char *current_function;
+    char *space;
+    char *class_name;
+    class_name=get_active_class_name(&space TSRMLS_CC); 
+
+    if (strlen(space)==2) {
+        char *fname = get_active_function_name(TSRMLS_C);
+        current_function=emalloc(strlen(class_name)+3+strlen(fname));
+        strcpy(current_function,class_name);
+        strcat(current_function,"::");
+        strcat(current_function,fname);
+    } else {
+        current_function = get_active_function_name(TSRMLS_C);
+        //fname = get_active_function_name(TSRMLS_C);
+        //current_function=emalloc(1+strlen(fname));
+        //strcpy(current_function,fname);
+    }
+
+
     while (fl_start) {
         if (!strcmp(fl_start->name,current_function)) {
             cl=fl_start->callback_ref;
@@ -317,13 +335,17 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         efree(args[0]);
         efree(args);
     } 
-
+}
+ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
+{
+    fc_do_callback();
     //fc_zend_execute(op_array TSRMLS_CC);
     execute(op_array TSRMLS_CC);
     //fprintf(stderr,"calling f11\n");
 }
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
+    fc_do_callback();
     execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }

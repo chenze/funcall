@@ -12,14 +12,17 @@ function a2($p1) {
 echo "aa()\n";
 }
 }
-function bbb($a,$b) {
+function bbb($a) {
     var_dump($a);
+    //var_dump($a);
     return true;
 }
 fc_add_start('c::aa','bbb');
+fc_add_start('trim','bbb');
 //fc_list('bbb');
 $c=new c;
 $c->aa('aa','bb','cc','dd');
+echo trim("xxxx a  ");
 //$c->a2('aa');
 //$a=trim('aa ');
 //echo $a;
