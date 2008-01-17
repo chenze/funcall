@@ -63,6 +63,7 @@ PHP_FUNCTION(fc_list);
 ZEND_BEGIN_MODULE_GLOBALS(funcall)
     fc_function_list *fc_start_list;	
     fc_function_list *fc_end_list;	
+    int in_callback;	
 ZEND_END_MODULE_GLOBALS(funcall)
 
 /* In every utility function you add that needs to use variables 
