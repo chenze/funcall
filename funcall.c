@@ -145,6 +145,7 @@ PHP_MSHUTDOWN_FUNCTION(funcall)
  */
 PHP_RINIT_FUNCTION(funcall)
 {
+    FCG(in_callback)=0;
 	return SUCCESS;
 }
 /* }}} */
@@ -320,10 +321,12 @@ void fc_do_callback() {
         if (!strcmp(fl_start->name,current_function)) {
             cl=fl_start->callback_ref;
             while (cl) {
+                FCG(in_callback)=1;
                 if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 1, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
                     //
                 }
+                FCG(in_callback)=0;
                 cl=cl->next;
             }
             break;
@@ -338,14 +341,18 @@ void fc_do_callback() {
 }
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
-    fc_do_callback();
+    if (FCG(in_callback)==0) {
+        fc_do_callback();
+    }
     //fc_zend_execute(op_array TSRMLS_CC);
     execute(op_array TSRMLS_CC);
     //fprintf(stderr,"calling f11\n");
 }
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
-    fc_do_callback();
+    if (FCG(in_callback)==0) {
+        fc_do_callback();
+    }
     execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }

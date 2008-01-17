@@ -13,6 +13,7 @@ echo "aa()\n";
 }
 }
 function bbb($a) {
+echo trim("pp  \n");
     var_dump($a);
     //var_dump($a);
     return true;
