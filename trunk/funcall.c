@@ -63,7 +63,7 @@ ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
  * Every user visible function must have an entry in funcall_functions[].
  */
 zend_function_entry funcall_functions[] = {
-	PHP_FE(fc_add_start,	NULL)
+	PHP_FE(fc_add_pre,	NULL)
 	PHP_FE(fc_list,	NULL)
 	{NULL, NULL, NULL}	/* Must be the last line in funcall_functions[] */
 };
@@ -179,9 +179,9 @@ PHP_MINFO_FUNCTION(funcall)
    purposes. */
 
 /* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string fc_add_start(string function,string callback)
+/* {{{ proto string fc_add_pre(string function,string callback)
    Return true if successfully add */
-PHP_FUNCTION(fc_add_start)
+PHP_FUNCTION(fc_add_pre)
 {
     char *function_name;
     char *callback_name;
@@ -245,7 +245,7 @@ PHP_FUNCTION(fc_list)
    follow this convention for the convenience of others editing your code.
 */
 
-char *get_current_function_name(zend_op_array *op_array TSRMLS_DC) 
+static char *get_current_function_name(zend_op_array *op_array TSRMLS_DC) 
 {
     char *fname;
     int l;
@@ -264,7 +264,7 @@ char *get_current_function_name(zend_op_array *op_array TSRMLS_DC)
     //op_array->function_name;
     return fname;
 }
-void fc_do_callback() {
+static void fc_do_callback() {
     fc_function_list *fl_start;
     fc_callback_list *cl;
     fl_start=FCG(fc_start_list); 
@@ -354,6 +354,7 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         fc_do_callback();
     }
     execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+    printf("type:%d\n",*EG(return_value_ptr_ptr));
     //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }
 
