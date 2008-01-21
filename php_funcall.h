@@ -52,7 +52,8 @@ PHP_RINIT_FUNCTION(funcall);
 PHP_RSHUTDOWN_FUNCTION(funcall);
 PHP_MINFO_FUNCTION(funcall);
 
-PHP_FUNCTION(fc_add_start);
+PHP_FUNCTION(fc_add_pre);
+PHP_FUNCTION(fc_add_post);
 PHP_FUNCTION(fc_list);
 
 /* 

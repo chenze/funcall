@@ -18,8 +18,8 @@ echo trim("pp  \n");
     //var_dump($a);
     return true;
 }
-fc_add_start('c::aa','bbb');
-fc_add_start('trim','bbb');
+fc_add_pre('c::aa','bbb');
+fc_add_pre('trim','bbb');
 //fc_list('bbb');
 $c=new c;
 $c->aa('aa','bb','cc','dd');
