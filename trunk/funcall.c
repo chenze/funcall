@@ -64,6 +64,7 @@ ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
  */
 zend_function_entry funcall_functions[] = {
 	PHP_FE(fc_add_pre,	NULL)
+	PHP_FE(fc_add_post,	NULL)
 	PHP_FE(fc_list,	NULL)
 	{NULL, NULL, NULL}	/* Must be the last line in funcall_functions[] */
 };
@@ -190,16 +191,119 @@ PHP_FUNCTION(fc_add_pre)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss", &function_name, &function_len, &callback_name, &callback_len) == FAILURE) {
 		return;
 	}
+    add_callback(function_name,function_len,callback_name,callback_len,0);
 
+	RETURN_TRUE;
+}
 
+PHP_FUNCTION(fc_add_post)
+{
+    char *function_name;
+    char *callback_name;
+    int function_len, callback_len;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss", &function_name, &function_len, &callback_name, &callback_len) == FAILURE) {
+		return;
+	}
+    add_callback(function_name,function_len,callback_name,callback_len,1);
+	RETURN_TRUE;
+}
+
+PHP_FUNCTION(fc_list)
+{
+    fc_function_list *gfl;
+    gfl=FCG(fc_pre_list); 
+}
+/* }}} */
+/* The previous line is meant for vim and emacs, so it can correctly fold and 
+   unfold functions in source code. See the corresponding marks just before 
+   function definition, where the functions purpose is also documented. Please 
+   follow this convention for the convenience of others editing your code.
+*/
+static double microtime() {
+    zval *t;
+    zval *func,*return_as_double;
+    zval **args[1];
+
+    MAKE_STD_ZVAL(func);
+    ZVAL_STRING(func, "microtime", 1);
+
+    MAKE_STD_ZVAL(return_as_double);
+    ZVAL_BOOL(return_as_double, TRUE);
+    args[0]=&return_as_double;
+
+    if(call_user_function_ex(EG(function_table), NULL, func, &t, 1, args, 0,NULL TSRMLS_CC) != SUCCESS) {
+        return (double)0;
+    }
+    //fprintf(stderr,"tld:%ld\n",Z_DVAL_P(t));
+    return Z_DVAL_P(t);
+}
+static char *get_current_function_name() 
+{
+    char *current_function;
+    char *space;
+    char *class_name;
+    class_name=get_active_class_name(&space TSRMLS_CC); 
+
+    if (strlen(space)==2) {
+        char *fname = get_active_function_name(TSRMLS_C);
+        current_function=emalloc(strlen(class_name)+3+strlen(fname));
+        strcpy(current_function,class_name);
+        strcat(current_function,"::");
+        strcat(current_function,fname);
+    } else {
+        current_function = get_active_function_name(TSRMLS_C);
+    }
+    return current_function;
+}
+int get_current_function_args(zval **args[]) {
+    args[0] = (zval**)emalloc(sizeof(zval**));
+    MAKE_STD_ZVAL(*args[0]);
+    array_init(*args[0]);
+
+    /*These get-args-code is from ZEND_FUNCTION(func_get_args)*/
+    void **p = EG(argument_stack).top_element-2;
+    int arg_count = (int)(zend_uintptr_t) *p;
+    int i;
+    for (i=0; i<arg_count; i++) {
+        zval *element;
+
+        ALLOC_ZVAL(element);
+        *element = **((zval **) (p-(arg_count-i)));
+        zval_copy_ctor(element);
+        INIT_PZVAL(element);
+        zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
+    }
+    return 1;
+}
+int add_callback(
+    char *function_name,
+    int function_len,
+    char *callback_name,
+    int callback_len,
+    int type)
+{
     fc_function_list *tmp_gfl,*gfl,*new_gfl;
     fc_callback_list *cl=NULL,*new_cl;
-    tmp_gfl=FCG(fc_start_list); 
-    if (!tmp_gfl) {
-        NEW_FN_LIST(FCG(fc_start_list),function_name,function_len);
-        gfl=FCG(fc_start_list);
+    if (type==0) {
+        tmp_gfl=FCG(fc_pre_list); 
     } else {
-        gfl=FCG(fc_start_list);
+        tmp_gfl=FCG(fc_post_list); 
+    }
+    if (!tmp_gfl) {
+        if (type==0) {
+            NEW_FN_LIST(FCG(fc_pre_list),function_name,function_len);
+            gfl=FCG(fc_pre_list);
+        } else {
+            NEW_FN_LIST(FCG(fc_post_list),function_name,function_len);
+            gfl=FCG(fc_post_list);
+        }
+    } else {
+        if (type==0) {
+            gfl=FCG(fc_pre_list);
+        } else {
+            gfl=FCG(fc_post_list);
+        }
          while (1) {
             if (!strcmp(gfl->name,function_name)) {
                 cl=gfl->callback_ref;
@@ -221,7 +325,7 @@ PHP_FUNCTION(fc_add_pre)
     } else {
         while (1) {
             if (!strcmp(cl->name,callback_name)) {
-                RETURN_FALSE
+                return 0;
             }
             if (!cl->next) {
                 NEW_CB_LIST(new_cl,callback_name,callback_len);
@@ -231,43 +335,19 @@ PHP_FUNCTION(fc_add_pre)
             cl=cl->next;
         }
     }
-	RETURN_TRUE;
+	return 1;
 }
-PHP_FUNCTION(fc_list)
-{
-    fc_function_list *gfl;
-    gfl=FCG(fc_start_list); 
-}
-/* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
-
-static char *get_current_function_name(zend_op_array *op_array TSRMLS_DC) 
-{
-    char *fname;
-    int l;
-    l=strlen(op_array->function_name);
-    if (op_array->scope && strlen(op_array->scope->name)>0) {
-        l+=strlen(op_array->scope->name)+3;
-        fname=emalloc(l);
-        strcpy(fname,op_array->scope->name);
-        strcat(fname,"::");
-        strcat(fname,op_array->function_name);
-    } else {
-        fname=emalloc(l+1);
-        strcpy(fname,op_array->function_name);
-    }
-    //fname=emalloc(strlen(op_array->function_name));
-    //op_array->function_name;
-    return fname;
-}
-static void fc_do_callback() {
-    fc_function_list *fl_start;
+static void fc_do_callback(char *current_function,zval *** args,int type) {
+    fc_function_list *fc_list;
     fc_callback_list *cl;
-    fl_start=FCG(fc_start_list); 
+    int arg_count;
+    if (type==0) {
+        arg_count=1;
+        fc_list=FCG(fc_pre_list); 
+    } else {
+        arg_count=2;
+        fc_list=FCG(fc_post_list); 
+    }
     zval *retval;
 
     zval **test_v;
@@ -276,13 +356,12 @@ static void fc_do_callback() {
     //Z_LVAL_P(test_v)=2;
 
 
-    zval ***args=NULL;
-    args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
+    /*args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
     args[0] = (zval**)emalloc(sizeof(zval**));
     MAKE_STD_ZVAL(*args[0]);
     array_init(*args[0]);
 
-    /*These get-args-code is from ZEND_FUNCTION(func_get_args)*/
+    //These get-args-code is from ZEND_FUNCTION(func_get_args)
     void **p = EG(argument_stack).top_element-2;
     int arg_count = (int)(zend_uintptr_t) *p;
     int i;
@@ -294,35 +373,21 @@ static void fc_do_callback() {
         zval_copy_ctor(element);
         INIT_PZVAL(element);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
-    }
+    }*/
+
+
     MAKE_STD_ZVAL(retval);
-    //current_function=get_current_function_name(op_array TSRMLS_CC);
+
     
-    char *current_function;
-    char *space;
-    char *class_name;
-    class_name=get_active_class_name(&space TSRMLS_CC); 
-
-    if (strlen(space)==2) {
-        char *fname = get_active_function_name(TSRMLS_C);
-        current_function=emalloc(strlen(class_name)+3+strlen(fname));
-        strcpy(current_function,class_name);
-        strcat(current_function,"::");
-        strcat(current_function,fname);
-    } else {
-        current_function = get_active_function_name(TSRMLS_C);
-        //fname = get_active_function_name(TSRMLS_C);
-        //current_function=emalloc(1+strlen(fname));
-        //strcpy(current_function,fname);
-    }
 
 
-    while (fl_start) {
-        if (!strcmp(fl_start->name,current_function)) {
-            cl=fl_start->callback_ref;
+
+    while (fc_list) {
+        if (!strcmp(fc_list->name,current_function)) {
+            cl=fc_list->callback_ref;
             while (cl) {
                 FCG(in_callback)=1;
-                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 1, args, 0,NULL TSRMLS_CC) != SUCCESS)
+                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
                     //
                 }
@@ -331,32 +396,73 @@ static void fc_do_callback() {
             }
             break;
         }
-        fl_start=fl_start->next;
+        fc_list=fc_list->next;
+    }
+ 
+}
+ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
+{
+    char *current_function;
+    zval **args[2];
+    //args = (zval ***)safe_emalloc(sizeof(zval **), 2, 0);
+    if (FCG(in_callback)==0) {
+        get_current_function_args(args);
+        current_function=get_current_function_name();
+        fc_do_callback(current_function,args,0);
+    }
+    //fc_zend_execute(op_array TSRMLS_CC);
+    double start_time=microtime();
+    execute(op_array TSRMLS_CC);
+    double process_time=microtime()-start_time;
+
+    /*struct timeval tp = {0};
+    struct timezone tz = {0};
+    gettimeofday(&tp, &tz)
+    (double)(tp.tv_sec + tp.tv_usec / MICRO_IN_SEC));*/
+
+    zval *t;
+    MAKE_STD_ZVAL(t);
+    ZVAL_DOUBLE(t,process_time);
+    args[1] = &t;
+    //MAKE_STD_ZVAL(*args[1]);
+    //array_init(*args[1]);
+    //Z_LVAL(**args[1])=10;
+            //fprintf(stderr,"te%ld\n",Z_DVAL_P(t));
+
+    if (FCG(in_callback)==0) {
+        fc_do_callback(current_function,args,1);
+    }
+    if (args) {
+        //zval_ptr_dtor(args[0]);
+        //efree(args[0]);
+        //efree(args[1]);
+        //efree(args);
+    }
+    //fprintf(stderr,"calling f11\n");
+}
+ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
+{
+    char *current_function;
+    zval ***args=NULL;
+    if (FCG(in_callback)==0) {
+        args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
+        get_current_function_args(args);
+        current_function=get_current_function_name();
+        fc_do_callback(current_function,args,0);
+    }
+    execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+    //printf("type:%d\n",*EG(return_value_ptr_ptr));
+    if (FCG(in_callback)==0) {
+        fc_do_callback(current_function,args,1);
     }
     if (args) {
         //zval_ptr_dtor(args[0]);
         efree(args[0]);
         efree(args);
-    } 
-}
-ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
-{
-    if (FCG(in_callback)==0) {
-        fc_do_callback();
     }
-    //fc_zend_execute(op_array TSRMLS_CC);
-    execute(op_array TSRMLS_CC);
-    //fprintf(stderr,"calling f11\n");
-}
-ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
-{
-    if (FCG(in_callback)==0) {
-        fc_do_callback();
-    }
-    execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
-    printf("type:%d\n",*EG(return_value_ptr_ptr));
     //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }
+
 
 /*
  * Local variables:
