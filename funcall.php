@@ -6,20 +6,21 @@ if(!extension_loaded('funcall')) {
 }
 class c {
 function aa($p1,$p2,$p3,$p4) {
+usleep(10000);
 echo "aa()\n";
 }
 function a2($p1) {
-echo "aa()\n";
+echo "aa22()\n";
 }
 }
-function bbb($a) {
+function bbb($a,$t) {
 echo trim("pp  \n");
     var_dump($a);
-    //var_dump($a);
-    return true;
+    var_dump($t);
+    //return true;
 }
-fc_add_pre('c::aa','bbb');
-fc_add_pre('trim','bbb');
+fc_add_post('c::aa','bbb');
+//fc_add_post('trim','bbb');
 //fc_list('bbb');
 $c=new c;
 $c->aa('aa','bb','cc','dd');
