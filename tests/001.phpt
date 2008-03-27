@@ -1,7 +1,9 @@
 --TEST--
 Check for funcall presence
 --SKIPIF--
-<?php if (!extension_loaded("funcall")) print "skip"; ?>
+<?php 
+
+ ?>
 --FILE--
 <?php 
 echo "funcall extension is available";
