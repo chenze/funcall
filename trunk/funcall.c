@@ -345,7 +345,7 @@ static void fc_do_callback(char *current_function,zval *** args,int type) {
         arg_count=1;
         fc_list=FCG(fc_pre_list); 
     } else {
-        arg_count=2;
+        arg_count=3;
         fc_list=FCG(fc_post_list); 
     }
     zval *retval;
@@ -402,63 +402,85 @@ static void fc_do_callback(char *current_function,zval *** args,int type) {
 }
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
-    char *current_function;
-    zval **args[2];
-    //args = (zval ***)safe_emalloc(sizeof(zval **), 2, 0);
-    if (FCG(in_callback)==0) {
+    if (FCG(in_callback)==1) {
+        execute(op_array TSRMLS_CC);
+    } else {
+        char *current_function;
+        zval ***args=NULL;
+        args = (zval ***)safe_emalloc(sizeof(zval **), 5, 0);
+
         get_current_function_args(args);
         current_function=get_current_function_name();
         fc_do_callback(current_function,args,0);
-    }
-    //fc_zend_execute(op_array TSRMLS_CC);
-    double start_time=microtime();
-    execute(op_array TSRMLS_CC);
-    double process_time=microtime()-start_time;
+        //fc_zend_execute(op_array TSRMLS_CC);
+        double start_time=microtime();
+        execute(op_array TSRMLS_CC);
+        double process_time=microtime()-start_time;
 
-    /*struct timeval tp = {0};
-    struct timezone tz = {0};
-    gettimeofday(&tp, &tz)
-    (double)(tp.tv_sec + tp.tv_usec / MICRO_IN_SEC));*/
+        /*struct timeval tp = {0};
+          struct timezone tz = {0};
+          gettimeofday(&tp, &tz)
+          (double)(tp.tv_sec + tp.tv_usec / MICRO_IN_SEC));*/
 
-    zval *t;
-    MAKE_STD_ZVAL(t);
-    ZVAL_DOUBLE(t,process_time);
-    args[1] = &t;
-    //MAKE_STD_ZVAL(*args[1]);
-    //array_init(*args[1]);
-    //Z_LVAL(**args[1])=10;
-            //fprintf(stderr,"te%ld\n",Z_DVAL_P(t));
+        zval *t;
+        MAKE_STD_ZVAL(t);
+        ZVAL_DOUBLE(t,process_time);
+        args[2] = &t;
 
-    if (FCG(in_callback)==0) {
+        args[1] = EG(return_value_ptr_ptr);
+        //MAKE_STD_ZVAL(*args[1]);
+        //array_init(*args[1]);
+        //Z_LVAL(**args[1])=10;
+        //fprintf(stderr,"te%ld\n",Z_DVAL_P(t));
+
         fc_do_callback(current_function,args,1);
-    }
-    if (args) {
-        //zval_ptr_dtor(args[0]);
-        //efree(args[0]);
-        //efree(args[1]);
-        //efree(args);
+        if (args) {
+            //zval_ptr_dtor(args[0]);
+            //efree(args[0]);
+            //efree(args[1]);
+            //efree(args[2]);
+            //efree(args);
+        }
     }
     //fprintf(stderr,"calling f11\n");
 }
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
-    char *current_function;
-    zval ***args=NULL;
-    if (FCG(in_callback)==0) {
-        args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
+    if (FCG(in_callback)==1) {
+        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+    } else {
+        char *current_function;
+        zval ***args=NULL;
+        args = (zval ***)safe_emalloc(sizeof(zval **), 6, 0);
+        zval *t;
+        zend_execute_data *ptr;
+        zval **return_value_ptr;
+
         get_current_function_args(args);
         current_function=get_current_function_name();
         fc_do_callback(current_function,args,0);
-    }
-    execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
-    //printf("type:%d\n",*EG(return_value_ptr_ptr));
-    if (FCG(in_callback)==0) {
+
+        double start_time=microtime();
+        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+        double process_time=microtime()-start_time;
+
+        MAKE_STD_ZVAL(t);
+        ZVAL_DOUBLE(t,process_time);
+        args[1] = &t;
+
+        ptr = EG(current_execute_data);
+        return_value_ptr = &(*(temp_variable *)((char *) ptr->Ts + ptr->opline->result.u.var)).var.ptr;
+        args[2] = return_value_ptr;
+
+        //printf("type:%d\n",*EG(return_value_ptr_ptr));
         fc_do_callback(current_function,args,1);
-    }
-    if (args) {
-        //zval_ptr_dtor(args[0]);
-        efree(args[0]);
-        efree(args);
+        if (args) {
+            //zval_ptr_dtor(args[0]);
+            //efree(args[0]);
+            //efree(args[1]);
+            //efree(args[2]);
+            //efree(args);
+        }
     }
     //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }
