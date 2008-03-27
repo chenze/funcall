@@ -12,11 +12,11 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author:Surf Chen <surfchen@gmail.com>                                |
   +----------------------------------------------------------------------+
 */
 
-/* $Id: header,v 1.16.2.1.2.1 2007/01/01 19:32:09 iliaa Exp $ */
+/* $Id$ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -94,24 +94,6 @@ zend_module_entry funcall_module_entry = {
 ZEND_GET_MODULE(funcall)
 #endif
 
-/* {{{ PHP_INI
- */
-PHP_INI_BEGIN()
-    //STD_PHP_INI_ENTRY("funcall.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_funcall_globals, funcall_globals)
-    //STD_PHP_INI_ENTRY("funcall.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_funcall_globals, funcall_globals)
-PHP_INI_END()
-/* }}} */
-
-/* {{{ php_funcall_init_globals
- */
-/* Uncomment this function if you have INI entries
-static void php_funcall_init_globals(zend_funcall_globals *funcall_globals)
-{
-	funcall_globals->global_value = 0;
-	funcall_globals->global_string = NULL;
-}
-*/
-/* }}} */
 
 /* {{{ PHP_MINIT_FUNCTION
  */
@@ -167,21 +149,11 @@ PHP_MINFO_FUNCTION(funcall)
 	php_info_print_table_start();
 	php_info_print_table_header(2, "funcall support", "enabled");
 	php_info_print_table_end();
-
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
 }
 /* }}} */
 
-
-/* Remove the following function when you have succesfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* Every user-visible function in PHP should document itself in the source */
 /* {{{ proto string fc_add_pre(string function,string callback)
-   Return true if successfully add */
+   Return true if successfully adding a pre-callback */
 PHP_FUNCTION(fc_add_pre)
 {
     char *function_name;
@@ -195,7 +167,10 @@ PHP_FUNCTION(fc_add_pre)
 
 	RETURN_TRUE;
 }
+/* }}} */
 
+/* {{{ proto string fc_add_pre(string function,string callback)
+   Return true if successfully adding a pre-callback */
 PHP_FUNCTION(fc_add_post)
 {
     char *function_name;
@@ -208,18 +183,18 @@ PHP_FUNCTION(fc_add_post)
     add_callback(function_name,function_len,callback_name,callback_len,1);
 	RETURN_TRUE;
 }
+/* }}} */
 
+/* {{{ proto string fc_add_pre(string function,string callback)
+   Return true if successfully adding a pre-callback */
 PHP_FUNCTION(fc_list)
 {
     fc_function_list *gfl;
     gfl=FCG(fc_pre_list); 
 }
 /* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
+
+
 static double microtime() {
     zval *t;
     zval *func,*return_as_double;
@@ -235,9 +210,9 @@ static double microtime() {
     if(call_user_function_ex(EG(function_table), NULL, func, &t, 1, args, 0,NULL TSRMLS_CC) != SUCCESS) {
         return (double)0;
     }
-    //fprintf(stderr,"tld:%ld\n",Z_DVAL_P(t));
     return Z_DVAL_P(t);
 }
+
 static char *get_current_function_name() 
 {
     char *current_function;
@@ -256,12 +231,13 @@ static char *get_current_function_name()
     }
     return current_function;
 }
+
 int get_current_function_args(zval **args[]) {
     args[0] = (zval**)emalloc(sizeof(zval**));
     MAKE_STD_ZVAL(*args[0]);
     array_init(*args[0]);
 
-    /*These get-args-code is from ZEND_FUNCTION(func_get_args)*/
+    /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
     void **p = EG(argument_stack).top_element-2;
     int arg_count = (int)(zend_uintptr_t) *p;
     int i;
@@ -276,6 +252,7 @@ int get_current_function_args(zval **args[]) {
     }
     return 1;
 }
+
 int add_callback(
     char *function_name,
     int function_len,
@@ -337,6 +314,7 @@ int add_callback(
     }
 	return 1;
 }
+
 static void fc_do_callback(char *current_function,zval *** args,int type) {
     fc_function_list *fc_list;
     fc_callback_list *cl;
@@ -349,38 +327,7 @@ static void fc_do_callback(char *current_function,zval *** args,int type) {
         fc_list=FCG(fc_post_list); 
     }
     zval *retval;
-
-    zval **test_v;
-    //MAKE_STD_ZVAL(test_v);
-    //convert_to_long(test_v);
-    //Z_LVAL_P(test_v)=2;
-
-
-    /*args = (zval ***)safe_emalloc(sizeof(zval **), 1, 0);
-    args[0] = (zval**)emalloc(sizeof(zval**));
-    MAKE_STD_ZVAL(*args[0]);
-    array_init(*args[0]);
-
-    //These get-args-code is from ZEND_FUNCTION(func_get_args)
-    void **p = EG(argument_stack).top_element-2;
-    int arg_count = (int)(zend_uintptr_t) *p;
-    int i;
-    for (i=0; i<arg_count; i++) {
-        zval *element;
-
-        ALLOC_ZVAL(element);
-        *element = **((zval **) (p-(arg_count-i)));
-        zval_copy_ctor(element);
-        INIT_PZVAL(element);
-        zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
-    }*/
-
-
     MAKE_STD_ZVAL(retval);
-
-    
-
-
 
     while (fc_list) {
         if (!strcmp(fc_list->name,current_function)) {
@@ -400,6 +347,7 @@ static void fc_do_callback(char *current_function,zval *** args,int type) {
     }
  
 }
+
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
     if (FCG(in_callback)==1) {
@@ -407,20 +355,14 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
     } else {
         char *current_function;
         zval ***args=NULL;
-        args = (zval ***)safe_emalloc(sizeof(zval **), 5, 0);
+        args = (zval ***)safe_emalloc(sizeof(zval **), 3, 0);
 
         get_current_function_args(args);
         current_function=get_current_function_name();
         fc_do_callback(current_function,args,0);
-        //fc_zend_execute(op_array TSRMLS_CC);
         double start_time=microtime();
         execute(op_array TSRMLS_CC);
         double process_time=microtime()-start_time;
-
-        /*struct timeval tp = {0};
-          struct timezone tz = {0};
-          gettimeofday(&tp, &tz)
-          (double)(tp.tv_sec + tp.tv_usec / MICRO_IN_SEC));*/
 
         zval *t;
         MAKE_STD_ZVAL(t);
@@ -428,22 +370,11 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         args[2] = &t;
 
         args[1] = EG(return_value_ptr_ptr);
-        //MAKE_STD_ZVAL(*args[1]);
-        //array_init(*args[1]);
-        //Z_LVAL(**args[1])=10;
-        //fprintf(stderr,"te%ld\n",Z_DVAL_P(t));
 
         fc_do_callback(current_function,args,1);
-        if (args) {
-            //zval_ptr_dtor(args[0]);
-            //efree(args[0]);
-            //efree(args[1]);
-            //efree(args[2]);
-            //efree(args);
-        }
     }
-    //fprintf(stderr,"calling f11\n");
 }
+
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
     if (FCG(in_callback)==1) {
@@ -451,7 +382,7 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
     } else {
         char *current_function;
         zval ***args=NULL;
-        args = (zval ***)safe_emalloc(sizeof(zval **), 6, 0);
+        args = (zval ***)safe_emalloc(sizeof(zval **), 3, 0);
         zval *t;
         zend_execute_data *ptr;
         zval **return_value_ptr;
@@ -472,17 +403,8 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         return_value_ptr = &(*(temp_variable *)((char *) ptr->Ts + ptr->opline->result.u.var)).var.ptr;
         args[2] = return_value_ptr;
 
-        //printf("type:%d\n",*EG(return_value_ptr_ptr));
         fc_do_callback(current_function,args,1);
-        if (args) {
-            //zval_ptr_dtor(args[0]);
-            //efree(args[0]);
-            //efree(args[1]);
-            //efree(args[2]);
-            //efree(args);
-        }
     }
-    //fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
 }
 
 
