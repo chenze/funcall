@@ -37,13 +37,13 @@ extern zend_module_entry funcall_module_entry;
 typedef struct _fc_function_list {
     char *name;
     zval *func;
-    struct fc_callback_list *callback_ref;
-    struct fc_function_list *next;
+    struct _fc_callback_list *callback_ref;
+    struct _fc_function_list *next;
 } fc_function_list;
 typedef struct _fc_callback_list {
     char *name;
     zval *func;
-    struct fc_function_list *next;
+    struct _fc_callback_list *next;
 } fc_callback_list;
 
 PHP_MINIT_FUNCTION(funcall);
