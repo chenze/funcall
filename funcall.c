@@ -169,8 +169,8 @@ PHP_FUNCTION(fc_add_pre)
 }
 /* }}} */
 
-/* {{{ proto string fc_add_pre(string function,string callback)
-   Return true if successfully adding a pre-callback */
+/* {{{ proto string fc_add_post(string function,string callback)
+   Return true if successfully adding a post-callback */
 PHP_FUNCTION(fc_add_post)
 {
     char *function_name;
@@ -185,12 +185,63 @@ PHP_FUNCTION(fc_add_post)
 }
 /* }}} */
 
-/* {{{ proto string fc_add_pre(string function,string callback)
-   Return true if successfully adding a pre-callback */
+/* {{{ proto string fc_list()
+   Return all callbacks like: 
+    array(
+        0=>array(
+            'mysql_query'=>array(
+                'pre_callback1','pre_callback2'
+            )
+        ),
+        1=>array(
+            'mysql_query'=>array(
+                'post_callback1','post_callback2'
+            )
+        )
+    );
+*/
 PHP_FUNCTION(fc_list)
 {
-    fc_function_list *gfl;
-    gfl=FCG(fc_pre_list); 
+    fc_function_list *pre_list,*post_list;
+    pre_list=FCG(fc_pre_list); 
+    post_list=FCG(fc_post_list); 
+
+    zval *pre_arr,*post_arr;
+    MAKE_STD_ZVAL(pre_arr);
+    MAKE_STD_ZVAL(post_arr);
+    array_init(pre_arr);
+    array_init(post_arr);
+
+    fc_callback_list *cb;
+    zval *callback_list;
+
+    while (pre_list) {
+        cb=pre_list->callback_ref;
+        MAKE_STD_ZVAL(callback_list);
+        array_init(callback_list);
+        while (cb) {
+            add_next_index_string(callback_list,cb->name,1);
+            cb=cb->next;
+        }
+        add_assoc_zval(pre_arr,pre_list->name,callback_list);
+        pre_list=pre_list->next;
+    }
+
+    while (post_list) {
+        cb=post_list->callback_ref;
+        MAKE_STD_ZVAL(callback_list);
+        array_init(callback_list);
+        while (cb) {
+            add_next_index_string(callback_list,cb->name,1);
+            cb=cb->next;
+        }
+        add_assoc_zval(post_arr,post_list->name,callback_list);
+        post_list=post_list->next;
+    }
+
+    array_init(return_value);
+    add_next_index_zval(return_value,pre_arr);
+    add_next_index_zval(return_value,post_arr);
 }
 /* }}} */
 

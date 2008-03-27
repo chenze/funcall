@@ -14,6 +14,8 @@ function a2($p1) {
 echo "aa22()\n";
 }
 }
+function b2($a,$t,$r) {
+}
 function bbb($a,$t,$r) {
 echo trim("pp  \n");
     var_dump($a);
@@ -25,8 +27,8 @@ echo "ok\n";
 fc_add_post('c::aa','bbb');
 fc_add_post('trim','bbb');
 fc_add_pre('c::aa','bbb');
+fc_add_pre('c::aa','b2');
 fc_add_pre('trim','bbb');
-//fc_list('bbb');
 $c=new c;
 $c->aa('aa','bb','cc','dd');
 trim("xxxx a  ");
@@ -34,6 +36,7 @@ trim("xxxx a  ");
 //$a=trim('aa ');
 //echo $a;
 echo "ok\n";
+var_dump(fc_list());
 exit;
 $module = 'funcall';
 $functions = get_extension_funcs($module);
