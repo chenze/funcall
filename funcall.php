@@ -19,5 +19,6 @@ function post_cb($args,$result,$process_time) {
 
 fc_add_pre('my_func','pre_cb');
 fc_add_post('my_func','post_cb');
+var_dump(fc_list());
 my_func('php','c');
 ?>
