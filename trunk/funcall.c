@@ -152,8 +152,8 @@ PHP_MINFO_FUNCTION(funcall)
 }
 /* }}} */
 
-/* {{{ proto string fc_add_pre(string function,string callback)
-   Return true if successfully adding a pre-callback */
+/* {{{ proto boolean fc_add_pre(string function,string callback)
+    Add a pre-callback. Return true if successfully */
 PHP_FUNCTION(fc_add_pre)
 {
     char *function_name;
@@ -169,8 +169,8 @@ PHP_FUNCTION(fc_add_pre)
 }
 /* }}} */
 
-/* {{{ proto string fc_add_post(string function,string callback)
-   Return true if successfully adding a post-callback */
+/* {{{ proto boolean fc_add_post(string function,string callback)
+   Add a post-callback.Return true if successfully  */
 PHP_FUNCTION(fc_add_post)
 {
     char *function_name;
@@ -185,7 +185,7 @@ PHP_FUNCTION(fc_add_post)
 }
 /* }}} */
 
-/* {{{ proto string fc_list()
+/* {{{ proto array fc_list()
    Return all callbacks like: 
     array(
         0=>array(
