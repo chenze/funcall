@@ -1,49 +1,23 @@
 <?php
-$br = (php_sapi_name() == "cli")? "":"<br>";
-
 if(!extension_loaded('funcall')) {
 	dl('funcall.so');
 }
-class c {
-function aa($p1,$p2,$p3,$p4) {
-usleep(10000);
-echo "aa()\n";
-return "abc";
+function my_func($arg1,$arg2) {
+    usleep(20000);
+    echo "step 002\n";
+    return $arg1.$arg2;
 }
-function a2($p1) {
-echo "aa22()\n";
+function pre_cb($args) {
+    var_dump($args);
+    echo "step 001\n";
 }
+function post_cb($args,$result,$process_time) {
+    var_dump($args);
+    var_dump($result);
+    echo 'step 003 (cost:',$process_time,")\n";
 }
-function b2($a,$t,$r) {
-}
-function bbb($a,$t,$r) {
-echo trim("pp  \n");
-    var_dump($a);
-    var_dump($t);
-    var_dump($r);
-echo "ok\n";
-    //return true;
-}
-fc_add_post('c::aa','bbb');
-fc_add_post('trim','bbb');
-fc_add_pre('c::aa','bbb');
-fc_add_pre('c::aa','b2');
-fc_add_pre('trim','bbb');
-$c=new c;
-$c->aa('aa','bb','cc','dd');
-trim("xxxx a  ");
-//$c->a2('aa');
-//$a=trim('aa ');
-//echo $a;
-echo "ok\n";
-var_dump(fc_list());
-exit;
-$module = 'funcall';
-$functions = get_extension_funcs($module);
-echo "Functions available in the test extension:$br\n";
-foreach($functions as $func) {
-    echo $func."$br\n";
-}
-echo $br;
-//fc_add_start('trim','surfchen_cb');
+
+fc_add_pre('my_func','pre_cb');
+fc_add_post('my_func','post_cb');
+my_func('php','c');
 ?>
