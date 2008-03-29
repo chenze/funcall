@@ -100,7 +100,8 @@ ZEND_GET_MODULE(funcall)
 PHP_MINIT_FUNCTION(funcall)
 {
     fc_zend_execute=zend_execute;
-    zend_execute=fc_execute;
+    zend_execute=&fc_execute;
+    FCG(in_callback)=0;
 
     fc_zend_execute_internal=zend_execute_internal;
     zend_execute_internal=fc_execute_internal;
@@ -401,15 +402,15 @@ static void fc_do_callback(char *current_function,zval *** args,int type) {
 
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
-    if (FCG(in_callback)==1) {
+    char *current_function;
+    current_function=get_current_function_name();
+    if (FCG(in_callback)==1 || !current_function) {
         execute(op_array TSRMLS_CC);
     } else {
-        char *current_function;
         zval ***args=NULL;
         args = (zval ***)safe_emalloc(sizeof(zval **), 3, 0);
 
         get_current_function_args(args);
-        current_function=get_current_function_name();
         fc_do_callback(current_function,args,0);
         double start_time=microtime();
         execute(op_array TSRMLS_CC);
@@ -428,7 +429,9 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
-    if (FCG(in_callback)==1) {
+    char *current_function;
+    current_function=get_current_function_name();
+    if (FCG(in_callback)==1 || !current_function) {
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     } else {
         char *current_function;
