@@ -1,0 +1,6 @@
+cd funcall-source
+phpize
+./configure
+make
+make install
+add "extension=funcall.so" to php.ini
