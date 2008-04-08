@@ -7,6 +7,11 @@ function my_func($arg1,$arg2) {
     echo "step 002\n";
     return $arg1.$arg2;
 }
+class my_class {
+    function f1() {
+        return true;
+    }
+}
 function pre_cb($args) {
     var_dump($args);
     echo "step 001\n";
@@ -19,8 +24,15 @@ function post_cb($args,$result,$process_time) {
 
 fc_add_pre('my_func','pre_cb');
 fc_add_post('my_func','post_cb');
-fc_add_post('trim','post_cb');
-var_dump(fc_list());
 my_func('php','c');
+
+fc_add_post('trim','post_cb');
 echo trim("abc\n");
+
+fc_add_pre('my_class::f1','pre_cb');
+fc_add_post('my_class::f1','post_cb');
+$my_class=new my_class;
+$my_class->f1();
+
+var_dump(fc_list());
 ?>
