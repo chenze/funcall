@@ -263,7 +263,7 @@ static double microtime() {
     ZVAL_STRING(func, "microtime", 1);
 
     MAKE_STD_ZVAL(return_as_double);
-    ZVAL_BOOL(return_as_double, TRUE);
+    ZVAL_BOOL(return_as_double, 1);
     args[0]=&return_as_double;
 
     if(call_user_function_ex(EG(function_table), NULL, func, &t, 1, args, 0,NULL TSRMLS_CC) != SUCCESS) {
