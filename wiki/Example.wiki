@@ -1,3 +1,4 @@
+#labels Featured
 ===example 1===
 {{{
 <?php
