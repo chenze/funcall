@@ -284,6 +284,7 @@ static char *get_current_function_name()
     if (strlen(space)==2) {
         char *fname = get_active_function_name(TSRMLS_C);
         current_function=emalloc(strlen(class_name)+3+strlen(fname));
+        memset(current_function,0,strlen(class_name)+3+strlen(fname));
         strcpy(current_function,class_name);
         strcat(current_function,"::");
         strcat(current_function,fname);
@@ -459,6 +460,9 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
         fc_do_callback(current_function,args,1);
     }
+    if (strchr(current_function,':')!=NULL) {
+        efree(current_function);
+    }
 }
 
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
@@ -492,6 +496,9 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         args[1] = return_value_ptr;
 
         fc_do_callback(current_function,args,1);
+    }
+    if (strchr(current_function,':')!=NULL) {
+        efree(current_function);
     }
 }
 
