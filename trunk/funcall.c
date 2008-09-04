@@ -255,6 +255,7 @@ PHP_FUNCTION(fc_list)
 
 
 static double microtime() {
+	TSRMLS_FETCH();
     zval *t;
     zval *func,*return_as_double;
     zval **args[1];
@@ -298,6 +299,7 @@ static char *get_current_function_name()
 }
 
 static int get_current_function_args(zval **args[]) {
+	TSRMLS_FETCH();
     args[0] = (zval**)emalloc(sizeof(zval**));
     MAKE_STD_ZVAL(*args[0]);
     array_init(*args[0]);
