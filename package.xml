@@ -24,7 +24,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <api>stable</api>
  </stability>
  <license>New BSD</license>
- <notes>Bug fixed release
+ <notes>add ZTS support
  </notes>
  <contents>
   <dir name="/">
