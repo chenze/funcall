@@ -335,7 +335,7 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
     } else {
         /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
         void **p = EG(argument_stack).top_element-2;
-        int arg_count = (int)(zend_uintptr_t) *p;
+        int arg_count = (int)(zend_ulong) *p;
         int i;
         for (i=0; i<arg_count; i++) {
             zval *element;
