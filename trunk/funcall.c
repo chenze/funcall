@@ -298,26 +298,54 @@ static char *get_current_function_name(TSRMLS_D)
     if (!current_function) {
         return "NONE-FUNCTION";
     }
+    if (!strcmp("main",current_function)) {
+        zend_execute_data *exec_data = EG(current_execute_data);
+        switch (exec_data->opline->op2.u.constant.value.lval) {
+            case ZEND_INCLUDE:
+                return "include";
+            case ZEND_REQUIRE:
+                return "require";
+            case ZEND_INCLUDE_ONCE:
+                return "include_once";
+            case ZEND_REQUIRE_ONCE:
+                return "require_once";
+        }
+    }
     return current_function;
 }
 
-static int get_current_function_args(zval **args[] TSRMLS_DC) {
+static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC) {
     args[0] = (zval**)emalloc(sizeof(zval**));
     MAKE_STD_ZVAL(*args[0]);
     array_init(*args[0]);
 
-    /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
-    void **p = EG(argument_stack).top_element-2;
-    int arg_count = (int)(zend_uintptr_t) *p;
-    int i;
-    for (i=0; i<arg_count; i++) {
+    if (
+        !strcmp(current_name,"include_once")
+        || !strcmp(current_name,"include")
+        || !strcmp(current_name,"require_once")
+        || !strcmp(current_name,"require")
+    ) {
+        zend_execute_data *exec_data = EG(current_execute_data);
         zval *element;
-
         ALLOC_ZVAL(element);
-        *element = **((zval **) (p-(arg_count-i)));
+        *element = exec_data->opline->op1.u.constant;
         zval_copy_ctor(element);
         INIT_PZVAL(element);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
+    } else {
+        /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
+        void **p = EG(argument_stack).top_element-2;
+        int arg_count = (int)(zend_uintptr_t) *p;
+        int i;
+        for (i=0; i<arg_count; i++) {
+            zval *element;
+
+            ALLOC_ZVAL(element);
+            *element = **((zval **) (p-(arg_count-i)));
+            zval_copy_ctor(element);
+            INIT_PZVAL(element);
+            zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
+        }
     }
     return 1;
 }
@@ -446,7 +474,7 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         zval ***args=NULL;
         args = (zval ***)safe_emalloc(3,sizeof(zval **), 0);
 
-        get_current_function_args(args TSRMLS_CC);
+        get_current_function_args(current_function,args TSRMLS_CC);
         fc_do_callback(current_function,args,0 TSRMLS_CC);
         double start_time=microtime(TSRMLS_C);
         execute(op_array TSRMLS_CC);
@@ -480,7 +508,7 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         zend_execute_data *ptr;
         zval **return_value_ptr;
 
-        get_current_function_args(args TSRMLS_CC);
+        get_current_function_args(current_function,args TSRMLS_CC);
         fc_do_callback(current_function,args,0 TSRMLS_CC);
 
         double start_time=microtime(TSRMLS_C);
