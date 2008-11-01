@@ -39,14 +39,14 @@ ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
     li->name=emalloc(len+1);\
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
-    ZVAL_STRING(li->func,fname,1)\
+    ZVAL_STRING(li->func,li->name,0)\
     li->next=NULL
 
 #define NEW_CB_LIST(li,fname,len) li=emalloc(sizeof(fc_callback_list));                   \
     li->name=emalloc(len+1);\
     strcpy(li->name,fname);\
     MAKE_STD_ZVAL(li->func);\
-    ZVAL_STRING(li->func,fname,1)\
+    ZVAL_STRING(li->func,li->name,0)\
     li->next=NULL
 
 /* {{{ funcall_functions[]
@@ -141,12 +141,16 @@ PHP_RSHUTDOWN_FUNCTION(funcall)
     f_list=FCG(fc_pre_list); 
     while (f_list) {
         tmp_list=f_list->next;
+        FREE_ZVAL(f_list->func);
+        efree(f_list->name);
         efree(f_list);
         f_list=tmp_list;
     }
     f_list=FCG(fc_post_list); 
     while (f_list) {
         tmp_list=f_list->next;
+        FREE_ZVAL(f_list->func);
+        efree(f_list->name);
         efree(f_list);
         f_list=tmp_list;
     }
@@ -263,18 +267,24 @@ static double microtime(TSRMLS_D) {
     zval *t;
     zval *func,*return_as_double;
     zval **args[1];
+    double dt;
 
     MAKE_STD_ZVAL(func);
-    ZVAL_STRING(func, "microtime", 1);
+    ZVAL_STRING(func, "microtime", 0);
 
     MAKE_STD_ZVAL(return_as_double);
     ZVAL_BOOL(return_as_double, 1);
     args[0]=&return_as_double;
 
     if(call_user_function_ex(EG(function_table), NULL, func, &t, 1, args, 0,NULL TSRMLS_CC) != SUCCESS) {
-        return (double)0;
+        dt=0;
+    } else {
+        dt=Z_DVAL_P(t);
     }
-    return Z_DVAL_P(t);
+    FREE_ZVAL(func);
+    FREE_ZVAL(t);
+    FREE_ZVAL(return_as_double);
+    return dt;
 }
 
 
@@ -334,6 +344,16 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
         /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
+        /*zend_execute_data *ex = EG(current_execute_data)->prev_execute_data;
+        fprintf(stderr,"test008\n");
+        if (!ex || !ex->function_state.arguments) {
+            return 1;
+        }
+        void **p = ex->function_state.arguments;
+        fprintf(stderr,"test009\n");
+        int arg_count = (int)(zend_uintptr_t) *p;
+        fprintf(stderr,"test011\n");*/
+
         void **p = EG(argument_stack).top_element-2;
         int arg_count = (int)(zend_ulong) *p;
         int i;
@@ -450,10 +470,12 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
             cl=fc_list->callback_ref;
             while (cl) {
                 FCG(in_callback)=1;
+        fprintf(stderr,"test1\n");
                 if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
                     //
                 }
+        fprintf(stderr,"test2\n");
                 FCG(in_callback)=0;
                 cl=cl->next;
             }
@@ -461,6 +483,7 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
         }
         fc_list=fc_list->next;
     }
+    FREE_ZVAL(retval);
  
 }
 
@@ -471,25 +494,37 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
     if (FCG(in_callback)==1 || callback_existed(current_function TSRMLS_CC)==0) {
         execute(op_array TSRMLS_CC);
     } else {
+        fprintf(stderr,"test001\n");
         zval ***args=NULL;
         args = (zval ***)safe_emalloc(3,sizeof(zval **), 0);
+        fprintf(stderr,"test002\n");
 
         get_current_function_args(current_function,args TSRMLS_CC);
+        fprintf(stderr,"test003\n");
         fc_do_callback(current_function,args,0 TSRMLS_CC);
+        fprintf(stderr,"test004\n");
         double start_time=microtime(TSRMLS_C);
+        fprintf(stderr,"test005\n");
         execute(op_array TSRMLS_CC);
         double process_time=microtime(TSRMLS_C)-start_time;
+        fprintf(stderr,"test01\n");
 
         zval *t;
         MAKE_STD_ZVAL(t);
         ZVAL_DOUBLE(t,process_time);
+        fprintf(stderr,"test02\n");
         args[2] = &t;
 
         args[1] = EG(return_value_ptr_ptr);
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
+        fprintf(stderr,"test03\n");
+        //FREE_HASHTABLE(Z_ARRVAL_P(*args[0]));
+        efree(args);
+        FREE_ZVAL(t);
     }
     if (strchr(current_function,':')!=NULL) {
+        fprintf(stderr,"test04\n");
         efree(current_function);
     }
 }
@@ -525,6 +560,8 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         args[1] = return_value_ptr;
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
+        efree(args);
+        FREE_ZVAL(t);
     }
     if (strchr(current_function,':')!=NULL) {
         efree(current_function);

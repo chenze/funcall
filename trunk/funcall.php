@@ -1,7 +1,18 @@
 <?php 
-function trim_post_cb($args) {
+class a{
+    function bb() {
+        echo "bb\n";
+    }
+}
+function pre_cb($args) {
     var_dump($args);
 }
-fc_add_pre('include','trim_post_cb');
+function post_cb($args,$result,$t) {
+    var_dump($args);
+}
+fc_add_pre('include','pre_cb');
+fc_add_pre('a::bb','pre_cb');
+print_r(fc_list());
 require_once('a.php');
+a::bb();
 ?>
