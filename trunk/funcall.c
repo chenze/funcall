@@ -357,10 +357,7 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
     ) {
         zend_execute_data *exec_data = EG(current_execute_data);
         zval *element;
-        ALLOC_ZVAL(element);
-        *element = exec_data->opline->op1.u.constant;
-        zval_copy_ctor(element);
-        INIT_PZVAL(element);
+        element = &(exec_data->opline->op1.u.constant);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
         /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
@@ -380,10 +377,7 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         for (i=0; i<arg_count; i++) {
             zval *element;
 
-            ALLOC_ZVAL(element);
-            *element = **((zval **) (p-(arg_count-i)));
-            zval_copy_ctor(element);
-            INIT_PZVAL(element);
+            element = *((zval **) (p-(arg_count-i)));
             zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
         }
     }
@@ -530,7 +524,9 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         args[1] = EG(return_value_ptr_ptr);
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
-        //FREE_HASHTABLE_REL((*args[0])->value.ht);
+        //efree((*args[0])->value.ht->arBuckets);
+        zend_hash_destroy((*args[0])->value.ht);
+        FREE_HASHTABLE(Z_ARRVAL_P(*args[0]));
         efree(*args[0]);
         efree(args[0]);
         efree(args);
@@ -573,6 +569,9 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
 
+        //efree((*args[0])->value.ht->arBuckets);
+        zend_hash_destroy((*args[0])->value.ht);
+        FREE_HASHTABLE((*args[0])->value.ht);
         efree(*args[0]);
         efree(args[0]);
         efree(args);
