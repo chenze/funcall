@@ -357,7 +357,10 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
     ) {
         zend_execute_data *exec_data = EG(current_execute_data);
         zval *element;
-        element = &(exec_data->opline->op1.u.constant);
+        ALLOC_ZVAL(element);
+        *element = exec_data->opline->op1.u.constant;
+        zval_copy_ctor(element);
+        INIT_PZVAL(element);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
         /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
@@ -377,7 +380,10 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         for (i=0; i<arg_count; i++) {
             zval *element;
 
-            element = *((zval **) (p-(arg_count-i)));
+            ALLOC_ZVAL(element);
+            *element = **((zval **) (p-(arg_count-i)));
+            zval_copy_ctor(element);
+            INIT_PZVAL(element);
             zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
         }
     }

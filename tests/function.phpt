@@ -1,14 +1,9 @@
-<?php 
-/*
-(user|system)class
-    static method(none-args or have-args)
-    none-static method(none-args or have-args)
-
-(user|system)function(none-args or have-args)
-
-include* require*
-*/
-//dl('funcall.so');
+--TEST--
+Checking functions
+--SKIPIF--
+<?php if (!extension_loaded("funcall")) print "skip"; ?>
+--FILE--
+<?php
 function m1() {
     return 0;
 }
@@ -53,3 +48,5 @@ m1();
 m2('abc',true,$t2);
 trim(' ok ');
 ?>
+--EXPECT--
+zerozero0testftestf2trimtrimok
