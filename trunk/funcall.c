@@ -363,20 +363,20 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         INIT_PZVAL(element);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
+        int i;
         /*These get-args-code is borrowed from ZEND_FUNCTION(func_get_args)*/
-        /*zend_execute_data *ex = EG(current_execute_data)->prev_execute_data;
-        fprintf(stderr,"test008\n");
+
+#if ZEND_MODULE_API_NO >= 20071006 
+        zend_execute_data *ex = EG(current_execute_data);
         if (!ex || !ex->function_state.arguments) {
             return 1;
         }
         void **p = ex->function_state.arguments;
-        fprintf(stderr,"test009\n");
         int arg_count = (int)(zend_uintptr_t) *p;
-        fprintf(stderr,"test011\n");*/
-
+#else
         void **p = EG(argument_stack).top_element-2;
         int arg_count = (int)(zend_ulong) *p;
-        int i;
+#endif
         for (i=0; i<arg_count; i++) {
             zval *element;
 
@@ -520,17 +520,25 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         fc_do_callback(current_function,args,0 TSRMLS_CC);
         double start_time=microtime(TSRMLS_C);
         execute(op_array TSRMLS_CC);
-        double process_time=microtime(TSRMLS_C)-start_time;
 
+        double process_time=microtime(TSRMLS_C)-start_time;
         zval *t;
         MAKE_STD_ZVAL(t);
         ZVAL_DOUBLE(t,process_time);
         args[2] = &t;
 
+
+#if ZEND_MODULE_API_NO >= 20071006 
+        //zend_execute_data *ex = EG(current_execute_data);
+        //fprintf(stderr,"test440%s\n",ex->function_state.function->common.function_name);
+        //zval **rv = ex->original_return_value;
+
+        args[1] = &t; 
+#else
         args[1] = EG(return_value_ptr_ptr);
+#endif
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
-        //efree((*args[0])->value.ht->arBuckets);
         zend_hash_destroy((*args[0])->value.ht);
         FREE_HASHTABLE(Z_ARRVAL_P(*args[0]));
         efree(*args[0]);
@@ -575,7 +583,6 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
 
-        //efree((*args[0])->value.ht->arBuckets);
         zend_hash_destroy((*args[0])->value.ht);
         FREE_HASHTABLE((*args[0])->value.ht);
         efree(*args[0]);

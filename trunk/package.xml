@@ -14,9 +14,9 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <email>surfchen@gmail.com</email>
   <active>yes</active>
  </lead>
- <date>2008-10-17</date>
+ <date>2008-11-03</date>
  <version>
-  <release>0.2.3</release>
+  <release>0.2.4</release>
   <api>0.2</api>
  </version>
  <stability>
@@ -24,13 +24,14 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <api>stable</api>
  </stability>
  <license>New BSD</license>
- <notes>add include*/require* support
-    fixed bug
+ <notes>
+    fixed memory leaks 
  </notes>
  <contents>
   <dir name="/">
    <dir name="tests">
-    <file name="funcall.phpt" role="test" />
+    <file name="function.phpt" role="test" />
+    <file name="method.phpt" role="test" />
    </dir> <!-- //tests -->
    <file name="config.m4" role="src" />
    <file name="config.w32" role="src" />
@@ -57,7 +58,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
  <changelog>
   <release>
    <version>
-    <release>0.2.3</release>
+    <release>0.2.4</release>
     <api>0.2</api>
    </version>
    <stability>
@@ -67,8 +68,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
    <date>2008-10-17</date>
    <license>New BSD</license>
    <notes>
-    add include*/require* support
-    fixed bug
+    fixed memory leaks 
    </notes>
   </release>
  </changelog>

@@ -13,6 +13,7 @@ function m1() {
     return 0;
 }
 function m2($a,$b,$c) {
+    echo "iii2\n";
     return 2;
 }
 class testc2 {
@@ -49,7 +50,7 @@ fc_add_post('trim','post_cb');
 
 $t2=new testc2;
 
-m1();
+//m1();
 m2('abc',true,$t2);
-trim(' ok ');
+//trim(' ok ');
 ?>
