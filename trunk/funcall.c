@@ -326,23 +326,119 @@ static char *get_current_function_name(TSRMLS_D)
         current_function = get_active_function_name(TSRMLS_C);
     }
     if (!current_function) {
-        return "NONE-FUNCTION";
+        current_function="main";
     }
     if (!strcmp("main",current_function)) {
         zend_execute_data *exec_data = EG(current_execute_data);
-        switch (exec_data->opline->op2.u.constant.value.lval) {
-            case ZEND_INCLUDE:
-                return "include";
-            case ZEND_REQUIRE:
-                return "require";
-            case ZEND_INCLUDE_ONCE:
-                return "include_once";
-            case ZEND_REQUIRE_ONCE:
-                return "require_once";
+        if (exec_data) {
+            switch (exec_data->opline->op2.u.constant.value.lval) {
+                case ZEND_REQUIRE_ONCE:
+                    return "require_once";
+                case ZEND_INCLUDE:
+                    return "include";
+                case ZEND_REQUIRE:
+                    return "require";
+                case ZEND_INCLUDE_ONCE:
+                    return "include_once";
+                case ZEND_EVAL:
+                    return "eval";
+            }
         }
     }
     return current_function;
 }
+
+
+
+#define FCT(offset) (*(temp_variable *)((char *) Ts + offset))
+static zval *fc_get_zval_ptr_tmp(znode *node, temp_variable *Ts TSRMLS_DC){
+    return &FCT(node->u.var).tmp_var;
+    //return &(*(temp_variable *)((char *) Ts + node->u.var)).tmp_var;
+}
+static zval *fc_get_zval_ptr_cv(znode *node, temp_variable *Ts TSRMLS_DC)
+{
+    zval ***ptr = &EG(current_execute_data)->CVs[node->u.var];
+
+    if (!*ptr) {
+        zend_compiled_variable *cv = &(EG(active_op_array)->vars[node->u.var]);
+        if (zend_hash_quick_find(EG(active_symbol_table), cv->name, cv->name_len+1, cv->hash_value, (void **)ptr)==FAILURE) {
+            zend_error(E_NOTICE, "Undefined variable: %s", cv->name);
+            return &EG(uninitialized_zval);
+         
+        }
+    }
+    return **ptr;
+}
+static zval *fc_get_zval_ptr_var(znode *node, temp_variable *Ts TSRMLS_DC)
+{
+    zval *ptr = FCT(node->u.var).var.ptr;
+    if (ptr) {
+        return ptr;
+    } else {
+        temp_variable *T = &FCT(node->u.var);
+        zval *str = T->str_offset.str;
+
+        /* string offset */
+        ALLOC_ZVAL(ptr);
+        T->str_offset.ptr = ptr;
+
+        if (T->str_offset.str->type != IS_STRING
+            || ((int)T->str_offset.offset < 0)
+            || (T->str_offset.str->value.str.len <= (int)T->str_offset.offset)) {
+            zend_error(E_NOTICE, "Uninitialized string offset:  %d", T->str_offset.offset);
+            ptr->value.str.val = STR_EMPTY_ALLOC();
+            ptr->value.str.len = 0;
+        } else {
+            char c = str->value.str.val[T->str_offset.offset];
+
+            ptr->value.str.val = estrndup(&c, 1);
+            ptr->value.str.len = 1;
+        }
+        PZVAL_UNLOCK_FREE(str);
+        ptr->refcount=1;
+        ptr->is_ref=1;
+        ptr->type = IS_STRING;
+        return ptr;
+    }
+}
+
+static zval *get_inc_filename(TSRMLS_D) {
+    zend_execute_data *execute_data = EG(current_execute_data);
+    zend_op *opline = execute_data->opline;
+    zval *inc_filename=NULL;
+    zval *tmp_filename=NULL;
+    zval tmp_inc_filename;
+    switch (opline->op1.op_type) {
+        case IS_CONST:
+            inc_filename = &opline->op1.u.constant;
+            break;
+        case IS_TMP_VAR:
+            tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
+            MAKE_STD_ZVAL(inc_filename);
+            ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
+            break;
+        case IS_CV:
+            inc_filename = fc_get_zval_ptr_cv(&opline->op1, execute_data->Ts TSRMLS_CC);
+            break;
+        case IS_VAR:
+            inc_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
+            break;
+        default:
+            zend_error(E_NOTICE, "Cannot get include filename or eval string");
+    }
+    if (!inc_filename || inc_filename->type!=IS_STRING) {
+        MAKE_STD_ZVAL(inc_filename);
+        ZVAL_STRING(inc_filename,"NONE",1);
+       /* tmp_inc_filename = *inc_filename;
+        zval_copy_ctor(&tmp_inc_filename);
+        convert_to_string(&tmp_inc_filename);
+        inc_filename = &tmp_inc_filename;*/
+    //} else {
+        //zval_copy_ctor(inc_filename);
+    }
+   return inc_filename;
+}
+
 
 static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC) {
     args[0] = (zval**)emalloc(sizeof(zval**));
@@ -354,13 +450,11 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         || !strcmp(current_name,"include")
         || !strcmp(current_name,"require_once")
         || !strcmp(current_name,"require")
+        || !strcmp(current_name,"eval")
     ) {
+        
         zend_execute_data *exec_data = EG(current_execute_data);
-        zval *element;
-        ALLOC_ZVAL(element);
-        *element = exec_data->opline->op1.u.constant;
-        zval_copy_ctor(element);
-        INIT_PZVAL(element);
+        zval *element=get_inc_filename(TSRMLS_C);
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
         int i;
