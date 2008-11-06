@@ -136,7 +136,6 @@ PHP_RINIT_FUNCTION(funcall)
 PHP_RSHUTDOWN_FUNCTION(funcall)
 {
 
-//fprintf(stderr,"shutdown\n");
     fc_function_list *f_list,*tmp_list;
     fc_callback_list *cb,*tmp_cb;
 
@@ -174,6 +173,7 @@ PHP_RSHUTDOWN_FUNCTION(funcall)
         efree(f_list);
         f_list=tmp_list;
     }
+    FCG(in_callback)=1;
 	return SUCCESS;
 }
 /* }}} */
@@ -330,7 +330,7 @@ static char *get_current_function_name(TSRMLS_D)
     }
     if (!strcmp("main",current_function)) {
         zend_execute_data *exec_data = EG(current_execute_data);
-        if (exec_data) {
+        if (exec_data && exec_data->opline  && exec_data->opline->op2.op_type==IS_CONST) {
             switch (exec_data->opline->op2.u.constant.value.lval) {
                 case ZEND_REQUIRE_ONCE:
                     return "require_once";
@@ -404,39 +404,34 @@ static zval *fc_get_zval_ptr_var(znode *node, temp_variable *Ts TSRMLS_DC)
 
 static zval *get_inc_filename(TSRMLS_D) {
     zend_execute_data *execute_data = EG(current_execute_data);
-    zend_op *opline = execute_data->opline;
     zval *inc_filename=NULL;
-    zval *tmp_filename=NULL;
-    zval tmp_inc_filename;
-    switch (opline->op1.op_type) {
-        case IS_CONST:
-            inc_filename = &opline->op1.u.constant;
-            break;
-        case IS_TMP_VAR:
-            tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
-            MAKE_STD_ZVAL(inc_filename);
-            ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
-            break;
-        case IS_CV:
-            inc_filename = fc_get_zval_ptr_cv(&opline->op1, execute_data->Ts TSRMLS_CC);
-            break;
-        case IS_VAR:
-            inc_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
-            break;
-        default:
-            zend_error(E_NOTICE, "Cannot get include filename or eval string");
+    if (execute_data && execute_data->opline) {
+        zend_op *opline  = execute_data->opline;
+        zval *tmp_filename=NULL;
+        switch (opline->op1.op_type) {
+            case IS_CONST:
+                inc_filename = &opline->op1.u.constant;
+                break;
+            case IS_TMP_VAR:
+                tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
+                MAKE_STD_ZVAL(inc_filename);
+                ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
+                break;
+            case IS_CV:
+                inc_filename = fc_get_zval_ptr_cv(&opline->op1, execute_data->Ts TSRMLS_CC);
+                break;
+            case IS_VAR:
+                inc_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
+                break;
+            default:
+                zend_error(E_NOTICE, "Cannot get include filename or eval string");
+        }
     }
     if (!inc_filename || inc_filename->type!=IS_STRING) {
         MAKE_STD_ZVAL(inc_filename);
         ZVAL_STRING(inc_filename,"NONE",1);
-       /* tmp_inc_filename = *inc_filename;
-        zval_copy_ctor(&tmp_inc_filename);
-        convert_to_string(&tmp_inc_filename);
-        inc_filename = &tmp_inc_filename;*/
-    //} else {
-        //zval_copy_ctor(inc_filename);
     }
-   return inc_filename;
+    return inc_filename;
 }
 
 
@@ -601,10 +596,14 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
 
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
+    if (FCG(in_callback)==1) {
+        execute(op_array TSRMLS_CC);
+        return;
+    }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
     
-    if (FCG(in_callback)==1 || callback_existed(current_function TSRMLS_CC)==0) {
+    if (callback_existed(current_function TSRMLS_CC)==0) {
         execute(op_array TSRMLS_CC);
     } else {
         zval ***args=NULL;
@@ -647,9 +646,13 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
+    if (FCG(in_callback)==1) {
+        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+        return;
+    }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
-    if (FCG(in_callback)==1 || callback_existed(current_function TSRMLS_CC)==0) {
+    if (callback_existed(current_function TSRMLS_CC)==0) {
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     } else {
         //zend_printf("|%s__\n",current_function);
