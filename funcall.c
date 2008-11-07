@@ -188,23 +188,7 @@ PHP_MINFO_FUNCTION(funcall)
 }
 /* }}} */
 
-#define FILE_APPEND 1<<0
-int file_put_contents(const char *file,char *str,int flags) {
-    FILE *fp=NULL;
-    if (flags & FILE_APPEND) {
-        fp=fopen(file,"a");
-    } else {
-        fp=fopen(file,"w");
-    }   
-    if (!fp) {
-        return NULL;
-    }   
-    fwrite(str,strlen(str),1,fp);
-    fclose(fp);
-}
-int xlog(char *str) {
-    return file_put_contents("/tmp/flog",str,FILE_APPEND);
-}
+
 /* {{{ proto boolean fc_add_pre(string function,string callback)
     Add a pre-callback. Return true if successfully */
 PHP_FUNCTION(fc_add_pre)
@@ -635,9 +619,6 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
-    //xlog(current_function);
-    //xlog("\n");
-    
     if (callback_existed(current_function TSRMLS_CC)==0) {
         execute(op_array TSRMLS_CC);
     } else {
@@ -687,8 +668,6 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
-    //xlog(current_function);
-    //xlog("\n");
     if (callback_existed(current_function TSRMLS_CC)==0) {
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     } else {
