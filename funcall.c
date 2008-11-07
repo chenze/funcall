@@ -188,6 +188,23 @@ PHP_MINFO_FUNCTION(funcall)
 }
 /* }}} */
 
+#define FILE_APPEND 1<<0
+int file_put_contents(const char *file,char *str,int flags) {
+    FILE *fp=NULL;
+    if (flags & FILE_APPEND) {
+        fp=fopen(file,"a");
+    } else {
+        fp=fopen(file,"w");
+    }   
+    if (!fp) {
+        return NULL;
+    }   
+    fwrite(str,strlen(str),1,fp);
+    fclose(fp);
+}
+int xlog(char *str) {
+    return file_put_contents("/tmp/flog",str,FILE_APPEND);
+}
 /* {{{ proto boolean fc_add_pre(string function,string callback)
     Add a pre-callback. Return true if successfully */
 PHP_FUNCTION(fc_add_pre)
@@ -330,7 +347,15 @@ static char *get_current_function_name(TSRMLS_D)
     }
     if (!strcmp("main",current_function)) {
         zend_execute_data *exec_data = EG(current_execute_data);
-        if (exec_data && exec_data->opline  && exec_data->opline->op2.op_type==IS_CONST) {
+
+        /* 
+           file: Zend/zend_compile.c
+           fnction: zend_do_include_or_eval 
+                    SET_UNUSED(opline->op2);
+
+           so here i use IS_UNSED to check,not IS_CONST
+       */
+        if (exec_data && exec_data->opline  && exec_data->opline->op2.op_type==IS_UNUSED) {
             switch (exec_data->opline->op2.u.constant.value.lval) {
                 case ZEND_REQUIRE_ONCE:
                     return "require_once";
@@ -355,7 +380,7 @@ static zval *fc_get_zval_ptr_tmp(znode *node, temp_variable *Ts TSRMLS_DC){
     return &FCT(node->u.var).tmp_var;
     //return &(*(temp_variable *)((char *) Ts + node->u.var)).tmp_var;
 }
-static zval *fc_get_zval_ptr_cv(znode *node, temp_variable *Ts TSRMLS_DC)
+static zval *fc_get_zval_ptr_cv(znode *node TSRMLS_DC)
 {
     zval ***ptr = &EG(current_execute_data)->CVs[node->u.var];
 
@@ -410,7 +435,9 @@ static zval *get_inc_filename(TSRMLS_D) {
         zval *tmp_filename=NULL;
         switch (opline->op1.op_type) {
             case IS_CONST:
-                inc_filename = &opline->op1.u.constant;
+                tmp_filename = &opline->op1.u.constant;
+                MAKE_STD_ZVAL(inc_filename);
+                ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
             case IS_TMP_VAR:
                 tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
@@ -418,10 +445,16 @@ static zval *get_inc_filename(TSRMLS_D) {
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
             case IS_CV:
-                inc_filename = fc_get_zval_ptr_cv(&opline->op1, execute_data->Ts TSRMLS_CC);
+                tmp_filename = fc_get_zval_ptr_cv(&opline->op1 TSRMLS_CC);
+                //zend_printf("ttttt%d",Z_STRLEN_P(inc_filename));
+                MAKE_STD_ZVAL(inc_filename);
+                ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
+                //ZVAL_STRING(inc_filename,"NONE",1);
                 break;
             case IS_VAR:
-                inc_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
+                tmp_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
+                MAKE_STD_ZVAL(inc_filename);
+                ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
             default:
                 zend_error(E_NOTICE, "Cannot get include filename or eval string");
@@ -602,6 +635,8 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
+    //xlog(current_function);
+    //xlog("\n");
     
     if (callback_existed(current_function TSRMLS_CC)==0) {
         execute(op_array TSRMLS_CC);
@@ -652,6 +687,8 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
+    //xlog(current_function);
+    //xlog("\n");
     if (callback_existed(current_function TSRMLS_CC)==0) {
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
     } else {
