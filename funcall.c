@@ -666,7 +666,6 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
         return;
     }
-    fprintf(stderr,"xxx");
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
     if (callback_existed(current_function TSRMLS_CC)==0) {
