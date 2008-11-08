@@ -95,7 +95,6 @@ PHP_MINIT_FUNCTION(funcall)
 #endif
     fc_zend_execute=zend_execute;
     zend_execute=fc_execute;
-    FCG(in_callback)=0;
 
     fc_zend_execute_internal=zend_execute_internal;
     zend_execute_internal=fc_execute_internal;
@@ -123,7 +122,7 @@ PHP_MSHUTDOWN_FUNCTION(funcall)
  */
 PHP_RINIT_FUNCTION(funcall)
 {
-    FCG(in_callback)=0;
+    FCG(use_callback)=CALLBACK_DISABLE;
     FCG(fc_pre_list)=NULL;
     FCG(fc_post_list)=NULL;
 	return SUCCESS;
@@ -173,7 +172,7 @@ PHP_RSHUTDOWN_FUNCTION(funcall)
         efree(f_list);
         f_list=tmp_list;
     }
-    FCG(in_callback)=1;
+    FCG(use_callback)=CALLBACK_DISABLE;
 	return SUCCESS;
 }
 /* }}} */
@@ -574,6 +573,7 @@ int fc_add_callback(
             cl=cl->next;
         }
     }
+    FCG(use_callback)=CALLBACK_ENABLE;
 	return 1;
 }
 
@@ -594,14 +594,14 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
         if (!strcmp(fc_list->name,current_function)) {
             cl=fc_list->callback_ref;
             while (cl) {
-                FCG(in_callback)=1;
+                FCG(use_callback)=CALLBACK_DISABLE;
                 if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
                     //
                 }
                 FREE_ZVAL(retval);
                 
-                FCG(in_callback)=0;
+                FCG(use_callback)=CALLBACK_ENABLE;
                 cl=cl->next;
             }
             break;
@@ -613,7 +613,7 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
 
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
-    if (FCG(in_callback)==1) {
+    if (FCG(use_callback)==CALLBACK_DISABLE) {
         execute(op_array TSRMLS_CC);
         return;
     }
@@ -662,10 +662,11 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
-    if (FCG(in_callback)==1) {
+    if (FCG(use_callback)==CALLBACK_DISABLE) {
         execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
         return;
     }
+    fprintf(stderr,"xxx");
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
     if (callback_existed(current_function TSRMLS_CC)==0) {

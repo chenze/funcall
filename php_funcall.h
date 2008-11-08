@@ -59,8 +59,11 @@ PHP_FUNCTION(fc_list);
 ZEND_BEGIN_MODULE_GLOBALS(funcall)
     fc_function_list *fc_pre_list;	
     fc_function_list *fc_post_list;	
-    int in_callback;	
+    int use_callback;	
 ZEND_END_MODULE_GLOBALS(funcall)
+
+#define CALLBACK_DISABLE 0
+#define CALLBACK_ENABLE 1
 
 /* In every utility function you add that needs to use variables 
    in php_funcall_globals, call TSRMLS_FETCH(); after declaring other 
