@@ -14,13 +14,24 @@ function pre_monitor($args) {
 function post_monitor($args,$result,$time) {
     echo 'post:',$result,"\n";
 }
+function getCommand() {
+    return 'echo "xyz";';
+}
 fc_add_pre('eval','pre_monitor');
 fc_add_post('eval','post_monitor');
-eval('echo "abc";');
-eval('echo "def";return "xxx";');
+$command='echo "abc"';
+eval($command.';');
+$command='echo "def";return "xxx";';
+eval($command);
+eval(getCommand());
+eval('echo "tgz";return "ok";');
 ?>
 --EXPECT--
 pre:echo "abc";
 abcpost:
 pre:echo "def";return "xxx";
 defpost:xxx
+pre:echo "xyz";
+xyzpost:
+pre:echo "tgz";return "ok";
+tgzpost:ok
