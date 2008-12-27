@@ -402,9 +402,13 @@ static zval *fc_get_zval_ptr_var(znode *node, temp_variable *Ts TSRMLS_DC)
             ptr->value.str.val = estrndup(&c, 1);
             ptr->value.str.len = 1;
         }
-        PZVAL_UNLOCK_FREE(str);
-        ptr->refcount=1;
+#if ZEND_MODULE_API_NO >= 20071006 
+        ptr->is_ref__gc=1;
+        ptr->refcount__gc=1;
+#else
         ptr->is_ref=1;
+        ptr->refcount=1;
+#endif
         ptr->type = IS_STRING;
         return ptr;
     }
@@ -417,24 +421,24 @@ static zval *get_inc_filename(TSRMLS_D) {
         zend_op *opline  = execute_data->opline;
         zval *tmp_filename=NULL;
         switch (opline->op1.op_type) {
-            case IS_CONST:
+            case IS_CONST://'a.php'
                 tmp_filename = &opline->op1.u.constant;
                 MAKE_STD_ZVAL(inc_filename);
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
-            case IS_TMP_VAR:
+            case IS_TMP_VAR://$a.$b
                 tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
                 MAKE_STD_ZVAL(inc_filename);
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
-            case IS_CV:
+            case IS_CV://$a
                 tmp_filename = fc_get_zval_ptr_cv(&opline->op1 TSRMLS_CC);
                 //zend_printf("ttttt%d",Z_STRLEN_P(inc_filename));
                 MAKE_STD_ZVAL(inc_filename);
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 //ZVAL_STRING(inc_filename,"NONE",1);
                 break;
-            case IS_VAR:
+            case IS_VAR://a()
                 tmp_filename = fc_get_zval_ptr_var(&opline->op1, execute_data->Ts TSRMLS_CC);
                 MAKE_STD_ZVAL(inc_filename);
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
@@ -638,6 +642,9 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
 
 #if ZEND_MODULE_API_NO >= 20071006 
+        //fprintf(stderr,"test001\n");
+        //args[1] = EG(return_value_ptr_ptr);
+        //fprintf(stderr,"test002%d\n",*args[1]);
         //zend_execute_data *ex = EG(current_execute_data);
         //fprintf(stderr,"test440%s\n",ex->function_state.function->common.function_name);
         //zval **rv = ex->original_return_value;
