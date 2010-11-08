@@ -1,5 +1,5 @@
 --TEST--
-Checking include
+Checking eval
 --SKIPIF--
 <?php if (!extension_loaded("funcall")) print "skip"; ?>
 --FILE--
@@ -19,12 +19,12 @@ function getCommand() {
 }
 fc_add_pre('eval','pre_monitor');
 fc_add_post('eval','post_monitor');
-$command='echo "abc"';
-eval($command.';');
+$command='echo "abc"; return 110';
+$ret=eval($command.';');
 $command='echo "def";return "xxx";';
-eval($command);
-eval(getCommand());
-eval('echo "tgz";return "ok";');
+$ret=eval($command);
+$ret=eval(getCommand());
+$ret=eval('echo "tgz";return "ok";');
 ?>
 --EXPECT--
 pre:echo "abc";

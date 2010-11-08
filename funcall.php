@@ -9,12 +9,23 @@
 include* require*
 */
 //dl('funcall.so');
+function includePath() {
+    echo "****************abc\n";
+    return '../test_include.php';
+}
+fc_add_pre('include','pre_cb');
+fc_add_post('include','post_cb');
+echo "first icnlude\n";
+//include  '../test_include.php';
+echo "2nd icnlude\n";
+include  includePath();
+echo "starting ...\n";
 function m1() {
-    return 0;
+    return 'm1 ret_v';
 }
 function m2($a,$b,$c) {
     echo "iii2\n";
-    return 2;
+    return 'm2 ret_v';
 }
 class testc2 {
     public function testf() {
@@ -22,15 +33,19 @@ class testc2 {
     }
 }
 function pre_cb($args) {
-    if (count($args)==0) {
+echo 'pre----------';
+var_dump($args);
+    /*if (count($args)==0) {
         echo 'zero';
     } else if (count($args)==1) {
         echo 'trim';
     } else {
         $args[2]->testf();
-    }
+    }*/
 }
 function post_cb($args,$result,$t) {
+echo 'post_cb----------';
+var_dump($result);
     if (count($args)==0) {
         echo 'zero';
     } else if (count($args)==1) {
@@ -38,7 +53,6 @@ function post_cb($args,$result,$t) {
     } else {
         $args[2]->testf();
     }
-    echo $result;
 }
 fc_add_pre('m1','pre_cb');
 fc_add_pre('m2','pre_cb');
@@ -48,9 +62,13 @@ fc_add_post('m2','post_cb');
 fc_add_post('trim','pre_cb');
 fc_add_post('trim','post_cb');
 
+//trim(' ok ');
 $t2=new testc2;
 
-//m1();
-m2('abc',true,$t2);
-//trim(' ok ');
-?>
+m1();
+$b=m2('abc',true,$t2);
+echo 'XXXXXXXXXXXXXXX--------';
+//var_dump(xdebug_get_declared_vars());
+echo 'endXXXXXXXXXXXXXXX--------';
+trim(' ok ');
+die;
