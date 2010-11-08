@@ -44,9 +44,9 @@ fc_add_post('trim','post_cb');
 
 $t2=new testc2;
 
-m1();
-m2('abc',true,$t2);
-trim(' ok ');
+$ret=m1();
+$ret=m2('abc',true,$t2);
+$ret=trim(' ok ');
 ?>
 --EXPECT--
 zerozero0testftestf2trimtrimok

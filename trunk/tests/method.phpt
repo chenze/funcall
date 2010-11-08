@@ -49,12 +49,12 @@ fc_add_post('testc1::sm2','post_cb');
 $t2=new testc2;
 
 $t1=new testc1;
-$t1->m1();
-$t1->m2('abc',true,$t2);
-testc1::sm1();
-$t1->m2('abc',true,$t2);
-$t1->m2('abc',true,$t2);
-testc1::sm2('abc',true,$t2);
+$r=$t1->m1();
+$r=$t1->m2('abc',true,$t2);
+$r=testc1::sm1();
+$r=$t1->m2('abc',true,$t2);
+$r=$t1->m2('abc',true,$t2);
+$r=testc1::sm2('abc',true,$t2);
 ?>
 --EXPECT--
 zerozero0testftestfzerozero0testftestftestftestftestftestf

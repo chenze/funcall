@@ -2,12 +2,12 @@
   +----------------------------------------------------------------------+
   | funcall                                                              |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2008 The PHP Group                                     |
+  | Copyright (c) 2008-2010  Chen Ze                                     |
   +----------------------------------------------------------------------+
   | This source file is subject to the new BSD license, that is bundled  |
   | with this package in the file LICENSE.                               |
   +----------------------------------------------------------------------+
-  | Author:Surf Chen <surfchen@gmail.com>                                |
+  | Author:Chen Ze <surfchen@gmail.com>                                |
   +----------------------------------------------------------------------+
 */
 
@@ -23,17 +23,24 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_funcall.h"
+#include "Zend/zend_execute.h"
+#include "ext/standard/php_var.h"
+
+#define FCT(offset) (*(temp_variable *)((char *) Ts + offset))
 
 ZEND_DECLARE_MODULE_GLOBALS(funcall)
 
 /* True global resources - no need for thread safety here */
 static int le_funcall;
+int fc_pre_inc(ZEND_OPCODE_HANDLER_ARGS);
+int fc_post_inc(ZEND_OPCODE_HANDLER_ARGS);
 
 ZEND_DLEXPORT void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
 ZEND_DLEXPORT void (*fc_zend_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
 
 ZEND_DLEXPORT void fc_execute(zend_op_array *op_array TSRMLS_DC);
 ZEND_DLEXPORT void (*fc_zend_execute)(zend_op_array *op_array TSRMLS_DC);
+
 
 #define NEW_FN_LIST(li,fname,len) li=emalloc(sizeof(fc_function_list));                   \
     li->name=emalloc(len+1);\
@@ -84,12 +91,94 @@ zend_module_entry funcall_module_entry = {
 #ifdef COMPILE_DL_FUNCALL
 ZEND_GET_MODULE(funcall)
 #endif
+zval *fc_get_zval(zend_execute_data *zdata, znode *node, temp_variable *Ts, int *is_var)
+{
+    switch (node->op_type) {
+        case IS_CONST:
+            return &node->u.constant;
+            break;
 
+        case IS_TMP_VAR:
+            *is_var = 1;
+            return &T(node->u.var).tmp_var;
+            break;
+
+        case IS_VAR:
+            *is_var = 1;
+            if (FCT(node->u.var).var.ptr) {
+                return FCT(node->u.var).var.ptr;
+            } else {
+                fprintf(stderr, "\nIS_VAR\n");
+            }
+            break;
+
+        case IS_CV: {
+            zval **tmp;
+            tmp = zend_get_compiled_variable_value(zdata, node->u.constant.value.lval);
+            if (tmp) {
+                return *tmp;
+            }
+            break;
+        }
+
+        case IS_UNUSED:
+            fprintf(stderr, "\nIS_UNUSED\n");
+            break;
+
+        default:
+            fprintf(stderr, "\ndefault %d\n", node->op_type);
+            break;
+    }
+
+    *is_var = 1;
+
+    return NULL;
+}
+
+ZEND_API int fc_include_or_eval_handler(ZEND_OPCODE_HANDLER_ARGS)
+{
+	printf(stderr, "fuccccccccccccccc\n");
+    zend_op *opline = execute_data->opline;
+
+    if (Z_LVAL(opline->op2.u.constant) == ZEND_EVAL) {
+        zval *inc_filename;
+        zval tmp_inc_filename;
+        int  is_var;
+        int  tmp_len;
+
+        inc_filename = fc_get_zval(execute_data, &opline->op1, execute_data->Ts, &is_var);
+
+        /* If there is no inc_filename, we're just bailing out instead */
+        if (!inc_filename) {
+            return ZEND_USER_OPCODE_DISPATCH;
+        }
+
+        if (inc_filename->type != IS_STRING) {
+            tmp_inc_filename = *inc_filename;
+            zval_copy_ctor(&tmp_inc_filename);
+            convert_to_string(&tmp_inc_filename);
+            inc_filename = &tmp_inc_filename;
+        }
+
+        /* Now let's store this info */
+        if (FCG(last_eval_statement)) {
+            efree(FCG(last_eval_statement));
+        }
+        FCG(last_eval_statement) = php_addcslashes(Z_STRVAL_P(inc_filename), Z_STRLEN_P(inc_filename), &tmp_len, 0, "'\\\0..\37", 6 TSRMLS_CC);
+		printf(stderr, "\nlast_eval_statement:%s\n",FCG(last_eval_statement));
+
+        if (inc_filename == &tmp_inc_filename) {
+            zval_dtor(&tmp_inc_filename);
+        }
+    }
+    return ZEND_USER_OPCODE_DISPATCH;
+}
 
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(funcall)
 {
+	FUNCALL_DEBUG("MINIT begin\n");
 #ifdef ZTS
     ZEND_INIT_MODULE_GLOBALS(funcall,NULL,NULL);
 #endif
@@ -99,9 +188,16 @@ PHP_MINIT_FUNCTION(funcall)
     fc_zend_execute_internal=zend_execute_internal;
     zend_execute_internal=fc_execute_internal;
 
+	//zend_set_user_opcode_handler(ZEND_INCLUDE_OR_EVAL, fc_include_or_eval_handler);
+
+
+	//zend_set_user_opcode_handler(fc_pre_inc, ZEND_PRE_INC);
+	//zend_set_user_opcode_handler(fc_post_inc, ZEND_POST_INC);
+
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
+	FUNCALL_DEBUG("MINIT end\n");
 	return SUCCESS;
 }
 /* }}} */
@@ -113,6 +209,8 @@ PHP_MSHUTDOWN_FUNCTION(funcall)
 	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
 	*/
+    //FREE_ZVAL(FCG(fc_null_zval));
+	FUNCALL_DEBUG("MSHUTDOWN\n");
 	return SUCCESS;
 }
 /* }}} */
@@ -122,9 +220,17 @@ PHP_MSHUTDOWN_FUNCTION(funcall)
  */
 PHP_RINIT_FUNCTION(funcall)
 {
+	FUNCALL_DEBUG("RINIT begin\n");
+
+    FCG(fc_null_zval)=NULL;
+    MAKE_STD_ZVAL(FCG(fc_null_zval));
+    ZVAL_NULL(FCG(fc_null_zval));
+
     FCG(use_callback)=CALLBACK_DISABLE;
     FCG(fc_pre_list)=NULL;
     FCG(fc_post_list)=NULL;
+	FCG(last_eval_statement) = NULL;
+	FUNCALL_DEBUG("RINIT end\n");
 	return SUCCESS;
 }
 /* }}} */
@@ -135,6 +241,11 @@ PHP_RINIT_FUNCTION(funcall)
 PHP_RSHUTDOWN_FUNCTION(funcall)
 {
 
+	FUNCALL_DEBUG("RSHUTDOWN begin\n");
+
+    FREE_ZVAL(FCG(fc_null_zval));
+
+	//php_var_dump(FCG(fc_null_zval),1 TSRMLS_CC);
     fc_function_list *f_list,*tmp_list;
     fc_callback_list *cb,*tmp_cb;
 
@@ -173,6 +284,7 @@ PHP_RSHUTDOWN_FUNCTION(funcall)
         f_list=tmp_list;
     }
     FCG(use_callback)=CALLBACK_DISABLE;
+	FUNCALL_DEBUG("RSHUTDOWN end\n");
 	return SUCCESS;
 }
 /* }}} */
@@ -192,6 +304,7 @@ PHP_MINFO_FUNCTION(funcall)
     Add a pre-callback. Return true if successfully */
 PHP_FUNCTION(fc_add_pre)
 {
+	FUNCALL_DEBUG("fc_add_pre() begin\n");
     char *function_name;
     char *callback_name;
     int function_len, callback_len;
@@ -200,6 +313,7 @@ PHP_FUNCTION(fc_add_pre)
 		return;
 	}
     fc_add_callback(function_name,function_len,callback_name,callback_len,0 TSRMLS_CC);
+	FUNCALL_DEBUG("fc_add_pre() end\n");
 
 	RETURN_TRUE;
 }
@@ -358,7 +472,6 @@ static char *get_current_function_name(TSRMLS_D)
 
 
 
-#define FCT(offset) (*(temp_variable *)((char *) Ts + offset))
 static zval *fc_get_zval_ptr_tmp(znode *node, temp_variable *Ts TSRMLS_DC){
     return &FCT(node->u.var).tmp_var;
     //return &(*(temp_variable *)((char *) Ts + node->u.var)).tmp_var;
@@ -377,46 +490,116 @@ static zval *fc_get_zval_ptr_cv(znode *node TSRMLS_DC)
     }
     return **ptr;
 }
+
+static zval *_get_zval_ptr_var_string_offset(const znode *node, const temp_variable *Ts, zend_free_op *should_free TSRMLS_DC)
+{
+    temp_variable *T = &T(node->u.var);
+    zval *str = T->str_offset.str;
+    zval *ptr;
+
+    /* string offset */
+    ALLOC_ZVAL(ptr);
+    T->str_offset.ptr = ptr;
+    should_free->var = ptr;
+
+    if (T->str_offset.str->type != IS_STRING
+        || ((int)T->str_offset.offset < 0)
+        || (T->str_offset.str->value.str.len <= (int)T->str_offset.offset)) {
+        ptr->value.str.val = STR_EMPTY_ALLOC();
+        ptr->value.str.len = 0;
+    } else {
+        ptr->value.str.val = estrndup(str->value.str.val + T->str_offset.offset, 1);
+        ptr->value.str.len = 1;
+    }
+    PZVAL_UNLOCK_FREE(str);
+    Z_SET_REFCOUNT_P(ptr, 1);
+    Z_SET_ISREF_P(ptr);
+    ptr->type = IS_STRING;
+    return ptr;
+}
+static inline void fc_zend_pzval_unlock_func(zval *z, zend_free_op *should_free, int unref TSRMLS_DC)
+{
+    if (!Z_DELREF_P(z)) {
+        Z_SET_REFCOUNT_P(z, 1);
+        Z_UNSET_ISREF_P(z);
+        should_free->var = z; 
+/*      should_free->is_var = 1; */
+    } else {
+        should_free->var = 0; 
+        if (unref && Z_ISREF_P(z) && Z_REFCOUNT_P(z) == 1) { 
+            Z_UNSET_ISREF_P(z);
+        }    
+        GC_ZVAL_CHECK_POSSIBLE_ROOT(z);
+    }    
+}
+
 static zval *fc_get_zval_ptr_var(znode *node, temp_variable *Ts TSRMLS_DC)
 {
-    zval *ptr = FCT(node->u.var).var.ptr;
+    zend_execute_data *execute_data = EG(current_execute_data);
+	//zend_op *opline = execute_data->opline;
+    zend_free_op free_op1;
+    //zval *inc_filename = _get_zval_ptr_var(&opline->op1, execute_data->Ts, &free_op1 TSRMLS_CC);
+    zval *inc_filename;
+    zval tmp_inc_filename;
+	zval *ptr = FCT(node->u.var).var.ptr;
+	//fprintf(stderr,"here we go%u\n",node->u.var);
+    if (EXPECTED(ptr != NULL)) {
+       fc_zend_pzval_unlock_func(ptr, &free_op1, 1 TSRMLS_CC);
+        inc_filename=ptr;
+		//fprintf(stderr,"here we go\n");
+    } else {
+        inc_filename=_get_zval_ptr_var_string_offset(node, Ts, &free_op1 TSRMLS_CC);
+    }
+	php_var_dump(&ptr,1 TSRMLS_CC);
+	if (inc_filename->type!=IS_STRING) {
+		tmp_inc_filename = *inc_filename;
+		zval_copy_ctor(&tmp_inc_filename);
+		convert_to_string(&tmp_inc_filename);
+		inc_filename = &tmp_inc_filename;
+	}
+	return inc_filename;
+
+
+/*
+    //zval *ptr = FCT(node->u.var).var.ptr;
     if (ptr) {
+php_var_dump(&ptr,1 TSRMLS_CC);
+		fprintf(stderr,"step001,%u\n",ptr->type);
         return ptr;
     } else {
-        temp_variable *T = &FCT(node->u.var);
-        zval *str = T->str_offset.str;
+		fprintf(stderr,"step002\n");
+      temp_variable *T = &T(node->u.var);
+	  zval *str = T->str_offset.str;
 
-        /* string offset */
-        ALLOC_ZVAL(ptr);
-        T->str_offset.ptr = ptr;
+	  if (T->str_offset.str->type != IS_STRING
+			  || ((int)T->str_offset.offset<0)
+			  || (T->str_offset.str->value.str.len <= T->str_offset.offset)) {
+		  zend_error(E_NOTICE, "Uninitialized string offset:  %d", T->str_offset.offset);
+		  T->tmp_var.value.str.val = STR_EMPTY_ALLOC();
+		  T->tmp_var.value.str.len = 0;
+		fprintf(stderr,"step003\n");
+	  } else {
+		  char c = str->value.str.val[T->str_offset.offset];
 
-        if (T->str_offset.str->type != IS_STRING
-            || ((int)T->str_offset.offset < 0)
-            || (T->str_offset.str->value.str.len <= (int)T->str_offset.offset)) {
-            zend_error(E_NOTICE, "Uninitialized string offset:  %d", T->str_offset.offset);
-            ptr->value.str.val = STR_EMPTY_ALLOC();
-            ptr->value.str.len = 0;
-        } else {
-            char c = str->value.str.val[T->str_offset.offset];
-
-            ptr->value.str.val = estrndup(&c, 1);
-            ptr->value.str.len = 1;
-        }
-#if ZEND_MODULE_API_NO >= 20071006 
-        ptr->is_ref__gc=1;
-        ptr->refcount__gc=1;
-#else
-        ptr->is_ref=1;
-        ptr->refcount=1;
-#endif
-        ptr->type = IS_STRING;
-        return ptr;
+		  T->tmp_var.value.str.val = estrndup(&c, 1);
+		  T->tmp_var.value.str.len = 1;
+		fprintf(stderr,"step004\n");
+	  }
+		Z_SET_REFCOUNT_P(&T->tmp_var, 1); 
+		Z_SET_ISREF_P(&T->tmp_var);
+		T->tmp_var.type = IS_STRING;
+		return &T->tmp_var;
     }
+*/
 }
 
 static zval *get_inc_filename(TSRMLS_D) {
-    zend_execute_data *execute_data = EG(current_execute_data);
     zval *inc_filename=NULL;
+	char *inc_filename_chars=strdup(zend_get_executed_filename(TSRMLS_C));
+	MAKE_STD_ZVAL(inc_filename);
+	ZVAL_STRING(inc_filename,inc_filename_chars,1);
+	return inc_filename;
+    zend_execute_data *execute_data = EG(current_execute_data);
     if (execute_data && execute_data->opline) {
         zend_op *opline  = execute_data->opline;
         zval *tmp_filename=NULL;
@@ -429,6 +612,7 @@ static zval *get_inc_filename(TSRMLS_D) {
             case IS_TMP_VAR://$a.$b
                 tmp_filename = fc_get_zval_ptr_tmp(&opline->op1, execute_data->Ts TSRMLS_CC);
                 MAKE_STD_ZVAL(inc_filename);
+				FUNCALL_DEBUG(sfprintf(stderr,"funcall::%d:%d:%s\n",opline->lineno,tmp_filename->type,Z_STRVAL_P(tmp_filename)));
                 ZVAL_STRING(inc_filename,Z_STRVAL_P(tmp_filename),1);
                 break;
             case IS_CV://$a
@@ -470,6 +654,11 @@ static int get_current_function_args(char *current_name,zval **args[] TSRMLS_DC)
         
         zend_execute_data *exec_data = EG(current_execute_data);
         zval *element=get_inc_filename(TSRMLS_C);
+		int tmp_len;
+		/*
+        if (!strcmp(current_name,"eval")) {
+			element=php_addcslashes(Z_STRVAL_P(element), Z_STRLEN_P(element), &tmp_len, 0, "'\\\0..\37", 6 TSRMLS_CC);
+		}*/
         zend_hash_next_index_insert((*args[0])->value.ht, &element, sizeof(zval *), NULL);
     } else {
         int i;
@@ -525,6 +714,7 @@ int fc_add_callback(
     int callback_len,
     int type TSRMLS_DC)
 {
+	FUNCALL_DEBUG("fc_add_callback() begin\n");
     fc_function_list *tmp_gfl,*gfl,*new_gfl;
     fc_callback_list *cl=NULL,*new_cl;
     if (type==0) {
@@ -533,6 +723,7 @@ int fc_add_callback(
         tmp_gfl=FCG(fc_post_list); 
     }
     if (!tmp_gfl) {
+		FUNCALL_DEBUG("no tmp_gfl\n");
         if (type==0) {
             NEW_FN_LIST(FCG(fc_pre_list),function_name,function_len);
             gfl=FCG(fc_pre_list);
@@ -541,6 +732,7 @@ int fc_add_callback(
             gfl=FCG(fc_post_list);
         }
     } else {
+		FUNCALL_DEBUG("yes tmp_gfl\n");
         if (type==0) {
             gfl=FCG(fc_pre_list);
         } else {
@@ -582,6 +774,7 @@ int fc_add_callback(
 }
 
 static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_DC) {
+	FUNCALL_DEBUG("fc_do_callback begin\n");
     fc_function_list *fc_list;
     fc_callback_list *cl;
     int arg_count;
@@ -594,17 +787,32 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
     }
     zval *retval=NULL;
 
+zval       **test_args[1];
+test_args[0] = &(cl->func);
+
     while (fc_list) {
         if (!strcmp(fc_list->name,current_function)) {
             cl=fc_list->callback_ref;
             while (cl) {
+				FUNCALL_DEBUG("calling func begin\n");
+				//fprintf(stderr,"-------------%s:%d\n",current_function,arg_count);
                 FCG(use_callback)=CALLBACK_DISABLE;
-                if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC) != SUCCESS)
+				//convert_to_string(cl->func);
+                //call_user_function_ex(EG(function_table), NULL, cl->func, &retval, 1, test_args, 0,NULL TSRMLS_CC);
+                //if (type==1) {
+                call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC);
+				//}
+				FUNCALL_DEBUG("calling func end\n");
+                if (retval) {
+                    FREE_ZVAL(retval);
+                }
+                /*if(call_user_function_ex(EG(function_table), NULL, cl->func, &retval, arg_count, args, 0,NULL TSRMLS_CC) != SUCCESS)
                 {
                     //
                 }
-                FREE_ZVAL(retval);
-                
+				*/
+                /*
+                */
                 FCG(use_callback)=CALLBACK_ENABLE;
                 cl=cl->next;
             }
@@ -613,16 +821,26 @@ static void fc_do_callback(char *current_function,zval *** args,int type TSRMLS_
         fc_list=fc_list->next;
     }
  
+	FUNCALL_DEBUG("fc_do_callback end\n");
 }
 
 ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC) 
 {
+	FUNCALL_DEBUG("fc_execute begin\n");
+	/*zend_execute_data *exec_data = EG(current_execute_data);
+    if (exec_data->opline) {
+        zend_op *opline  = exec_data->opline;
+		fprintf(stderr,"xx77:%d\n",opline->lineno);
+	}*/
     if (FCG(use_callback)==CALLBACK_DISABLE) {
         execute(op_array TSRMLS_CC);
         return;
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
+	FUNCALL_DEBUG("calling ");
+	FUNCALL_DEBUG(current_function);
+	FUNCALL_DEBUG("\n");
     if (callback_existed(current_function TSRMLS_CC)==0) {
         execute(op_array TSRMLS_CC);
     } else {
@@ -632,7 +850,12 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         get_current_function_args(current_function,args TSRMLS_CC);
         fc_do_callback(current_function,args,0 TSRMLS_CC);
         double start_time=microtime(TSRMLS_C);
-        execute(op_array TSRMLS_CC);
+        //execute(op_array TSRMLS_CC);
+		fc_zend_execute(op_array TSRMLS_CC);
+
+        //fprintf(stderr,"test002%d\n",*args[1]);
+        //fprintf(stderr,"test002%d\n",EG(return_value_ptr_ptr));
+        //zend_execute_data *ex = EG(current_execute_data);
 
         double process_time=microtime(TSRMLS_C)-start_time;
         zval *t;
@@ -642,17 +865,32 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
 
 
 #if ZEND_MODULE_API_NO >= 20071006 
-        //fprintf(stderr,"test001\n");
-        //args[1] = EG(return_value_ptr_ptr);
+        /*fprintf(stderr,"test001\n");
+		zend_op              *cur_opcode;
+        fprintf(stderr,"test002\n");
+		cur_opcode = *EG(opline_ptr);
+        fprintf(stderr,"test003\n");
+		zval *ret = fg_zval_ptr(&(cur_opcode->result), EG(current_execute_data)->Ts TSRMLS_CC);
+        fprintf(stderr,"test004\n");
+		args[1]=&ret;*/
+        /*args[1] = EG(return_value_ptr_ptr);
         //fprintf(stderr,"test002%d\n",*args[1]);
-        //zend_execute_data *ex = EG(current_execute_data);
-        //fprintf(stderr,"test440%s\n",ex->function_state.function->common.function_name);
-        //zval **rv = ex->original_return_value;
+        fprintf(stderr,"test002%d\n",args[1]);
+        zend_execute_data *ex = EG(current_execute_data);
+        fprintf(stderr,"test440%s\n",ex->function_state.function->common.function_name);
+        zval **rv = ex->original_return_value;*/
 
-        args[1] = &t; 
+        if (EG(return_value_ptr_ptr)) {
+			args[1] = EG(return_value_ptr_ptr); 
+		} else {
+			args[1] = &FCG(fc_null_zval);
+		}
+        //args[1] = EG(return_value_ptr_ptr);
 #else
+        //args[1] = &t; 
         args[1] = EG(return_value_ptr_ptr);
 #endif
+        //fc_do_callback(current_function,args,0 TSRMLS_CC);
 
         fc_do_callback(current_function,args,1 TSRMLS_CC);
         zend_hash_destroy((*args[0])->value.ht);
@@ -661,22 +899,42 @@ ZEND_API void fc_execute(zend_op_array *op_array TSRMLS_DC)
         efree(args[0]);
         efree(args);
         FREE_ZVAL(t);
+        //FREE_ZVAL(null_zval);
     }
     if (strchr(current_function,':')!=NULL) {
         efree(current_function);
     }
+	FUNCALL_DEBUG("fc_execute end\n");
 }
 
 ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC) 
 {
+	FUNCALL_DEBUG("fc_execute_internal begin\n");
+	/*
+	zend_execute_data *exec_data = EG(current_execute_data);
+	FUNCALL_DEBUG("exec_data got\n");
+    if (exec_data->opline) {
+		FUNCALL_DEBUG("we have opline\n");
+        zend_op *opline  = exec_data->opline;
+		fprintf(stderr,"xx99:%d\n",opline->lineno);
+	}*/
     if (FCG(use_callback)==CALLBACK_DISABLE) {
-        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		FUNCALL_DEBUG("CALLBACK_DISABLE\n");
+		if (fc_zend_execute_internal) {
+			fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		} else {
+			execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		}
         return;
     }
     char *current_function;
     current_function=get_current_function_name(TSRMLS_C);
     if (callback_existed(current_function TSRMLS_CC)==0) {
-        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		if (fc_zend_execute_internal) {
+			fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		} else {
+			execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		}
     } else {
         //zend_printf("|%s__\n",current_function);
         zval ***args=NULL;
@@ -689,7 +947,11 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
         fc_do_callback(current_function,args,0 TSRMLS_CC);
 
         double start_time=microtime(TSRMLS_C);
-        execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		if (fc_zend_execute_internal) {
+			fc_zend_execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		} else {
+			execute_internal(execute_data_ptr, return_value_used TSRMLS_CC);
+		}
         double process_time=microtime(TSRMLS_C)-start_time;
 
         //zend_printf("|%ld++\n",process_time);
@@ -713,7 +975,10 @@ ZEND_API void fc_execute_internal(zend_execute_data *execute_data_ptr, int retur
     if (strchr(current_function,':')!=NULL) {
         efree(current_function);
     }
+	FUNCALL_DEBUG("fc_execute_internal end\n");
 }
+
+
 
 
 /*
