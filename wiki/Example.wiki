@@ -31,7 +31,7 @@ function post_cb($args,$result,$process_time) {
 
 fc_add_pre('my_func','pre_cb');
 fc_add_post('my_func','post_cb');
-my_func('php','c');
+$ret=my_func('php','c');
 
 fc_add_post('trim','post_cb');
 $ret=trim("abc\n");
