@@ -1,4 +1,9 @@
-===example 1===
+==Notices==
+ * eval() is not fully supported - argument cannot not be catched. The argument returned to callback is always null. 
+ * if you want catch the return value, please ensure that you have variable assignment for the function being monitored. for example, $a=func(); is ok if you want catch the return value in post callbacks and without "$a=" you will get null.
+ * include*/require* return the resolved path to callbacks instead of the argument. for example, for include '../include.php', you will see /path/to/include.php instead of ../include.php
+
+===Example 1===
 {{{
 <?php
 if(!extension_loaded('funcall')) {
@@ -29,19 +34,20 @@ fc_add_post('my_func','post_cb');
 my_func('php','c');
 
 fc_add_post('trim','post_cb');
-echo trim("abc\n");
+$ret=trim("abc\n");
+echo $ret;
 
 fc_add_pre('my_class::f1','pre_cb');
 fc_add_post('my_class::f1','post_cb');
 $my_class=new my_class;
-$my_class->f1();
+$ret=$my_class->f1();
 
 var_dump(fc_list());
 ?>
 
 }}}
 
-===example 2===
+===Example 2===
 {{{
 $mq_time=$mq_count=0;
 function mysql_query_monitor($args,$result,$process_time) {
