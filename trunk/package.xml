@@ -16,7 +16,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
  </lead>
  <date>2010-11-08</date>
  <version>
-  <release>0.3.0</release>
+  <release>0.3.0alpha</release>
   <api>0.2</api>
  </version>
  <stability>
@@ -25,7 +25,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
  </stability>
  <license>New BSD</license>
  <notes>
- support 5.3 
+ Added PHP 5.3 support
  fixed bug #14849
  fixed bug #16553
  fixed bug #16999
@@ -62,7 +62,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
  <changelog>
   <release>
    <version>
-    <release>0.3.0</release>
+    <release>0.3.0alpha</release>
     <api>0.2</api>
    </version>
    <stability>
@@ -72,7 +72,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
    <date>2010-11-08</date>
    <license>New BSD</license>
    <notes>
- support 5.3 
+ Added PHP 5.3 support
  fixed bug #14849
  fixed bug #16553
  fixed bug #16999
